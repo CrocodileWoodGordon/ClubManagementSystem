@@ -44,3 +44,12 @@
 2. 通过 `rg`/`rg --files` 查找内容；避免无意义的格式化更改。
 3. 动到后端接口或数据库时，保持 `PROJECT_SPEC.md` 与实现一致，如有偏差先写明假设。
 4. 向用户反馈时统一使用中文说明，保持语气专业、简洁。
+5. 每次提交若涉及进度或跨模块契约，请同步更新下方“实时进展”与“跨文件接口备忘”。
+
+## 实时进展
+- 初始化阶段：完成 Next.js/Axum 工程脚手架、Docker Postgres 已运行（容器 `club_db`，`admin/password123`）。尚未实现实际业务逻辑，API 仅返回占位数据。
+
+## 跨文件接口备忘
+- `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
+- `frontend/components/forms/BulkAssignmentForm.tsx` 预期调用 `/api/classes/assign` 批量设置班级编号（暂未接线）。
+- `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
