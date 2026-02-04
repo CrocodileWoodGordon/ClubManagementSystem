@@ -11,6 +11,7 @@
 ### 根目录
 - `docker-compose.yml`：Postgres + Axum + Next.js 的本地部署定义。
 - `PROJECT_SPEC.md`：完整业务规格说明，变更任何业务前务必复核。
+- `DATABASE.md`：数据库范式设计（表、约束、索引），实现迁移/查询时必须对照此文件。
 - `AGENTS.md`：当前文件，供后续 AI 参考。
 
 ### backend（Rust + Axum）
@@ -49,6 +50,7 @@
 
 ## 实时进展
 - 初始化阶段：完成 Next.js/Axum 工程脚手架、Docker Postgres 已运行（容器 `club_db`，`admin/password123`）。尚未实现实际业务逻辑，API 仅返回占位数据。
+- 2026-02-04：完成数据库重构设计，新增 `DATABASE.md` 作为 schema 真源，后续 migrations 与服务实现需严格参照。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

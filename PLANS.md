@@ -13,9 +13,9 @@
    - 衔接：为后续所有步骤提供统一的运行基线。
 
 2. **建立初始数据库结构**
-   - 目标：创建 `backend/migrations/0001_init.sql`，定义 students/enrollments/classes/attendance/billing 等基础表，暂不写入业务逻辑。
+   - 目标：按照 `DATABASE.md` 中的范式设计创建 `backend/migrations/0001_init.sql`，覆盖 terms/students/clubs/classes/enrollments/attendance/billing/core 支撑表，暂不写入业务逻辑。
    - 预期修改文件：`backend/migrations/0001_init.sql`
-   - 衔接：供 SQLx 模型与服务层共用的 schema 来源。
+   - 衔接：供 SQLx 模型与服务层共用的 schema 来源，必须与 `DATABASE.md` 保持一致。
 
 3. **建模 Enrollment 领域类型**
    - 目标：在 `backend/src/domain/enrollment.rs` 定义报名相关 structs/enums（含导入状态、drop_date 等）。
