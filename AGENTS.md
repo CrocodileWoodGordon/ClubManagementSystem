@@ -1,6 +1,7 @@
 # Club Management System — Agent Notes
 
 ## 业务与流程速览
+- Excel 学生名单导入：以“校区 / 班级 / 姓名”三列的 Excel 批量生成/更新 `homerooms` 与 `students`，班级唯一键包含校区 + 学年 + 班级显示名。
 - Excel 报名导入：解析“年级班级姓名 + 周一~周五社团”生成 enrollment，初始班级均指向“待定班”。
 - 分班：管理员在前端按照“校区 + 社团 + 星期”筛选学生，批量设置班级编号/时间/地点，生成 `classes` 并回写 enrollment。
 - 考勤：按班级导出空白考勤表 -> 期末回收后导入，历史考勤在退换课时依然保留。
@@ -55,6 +56,7 @@
 - 2026-02-04：依据 `DATABASE.md` 实现 `backend/migrations/0001_init.sql`，包含 terms/students/clubs/classes/enrollments/attendance/billing 等全部核心表。
 - 2026-02-05：扩展 `backend/src/domain/enrollment.rs`，定义报名状态、Excel 草稿与导入反馈结构，供服务层统一复用。
 - 2026-02-05：完成 Excel 报名导入服务（`utils/excel.rs`、`services/enrollment_import.rs`、`api/imports.rs` 等），支持解析问卷星 Excel -> `import_jobs`/`enrollments` 并记录错误，`cargo check` 通过验证。
+- 2026-02-05：新增学生 Excel 导入链路（`services/student_import.rs` + `/api/import/students`），支持按校区/班级/姓名写入 `homerooms` 与 `students`，自动复用激活学期的学年信息。
 - 2026-02-05：落地多校区能力，新增 `campuses` 表并为 `homerooms`/`club_terms`/`classes`/`enrollments` 添加 `campus_id` 外键；同步更新 `DATABASE.md`、`PROJECT_SPEC.md` 与报名导入服务以按校区匹配社团。
 
 ## 跨文件接口备忘
@@ -62,3 +64,4 @@
 - `frontend/components/forms/BulkAssignmentForm.tsx` 预期调用 `/api/classes/assign` 批量设置班级编号（暂未接线）。
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（接口仍为占位，尚未实现筛选逻辑）。
+- `/api/import/students` 接收 `file` 字段的 Excel，A 列校区（匹配 `campuses.code/name`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。

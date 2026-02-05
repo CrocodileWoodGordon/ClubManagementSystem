@@ -30,3 +30,33 @@ FRONTEND_ORIGIN=http://localhost:3000
 - `docker compose logs -f db`：观察数据库容器输出。
 - `cargo check` / `cargo test`（在 `backend/`）：静态检查或运行 Rust 单元测试。
 - `npm run lint` / `npm run build`（在 `frontend/`）：前端 ESLint / 生产构建检查。
+
+### 数据库重建（开发环境）
+```bash
+# 关闭旧库后重建空库
+docker compose exec db psql -U admin -d postgres -c "DROP DATABASE IF EXISTS club_management WITH (FORCE)"
+docker compose exec db psql -U admin -d postgres -c "CREATE DATABASE club_management;"
+
+# 重新应用 migrations
+cd backend
+cargo sqlx migrate run
+
+# 可选：检查表结构
+docker compose exec db psql -U admin -d club_management -c "\d+ campuses"
+```
+
+### Excel 导入 API 自测
+学生名单导入接口：`POST http://localhost:8080/api/import/students`，表格仅需三列（校区、班级、姓名）。
+
+```bash
+curl -X POST http://localhost:8080/api/import/students \
+  -F "file=@/path/to/students.xlsx"
+```
+
+报名导入接口：`POST http://localhost:8080/api/import/enrollments`，格式参见 `PROJECT_SPEC.md`。
+
+```bash
+curl -X POST http://localhost:8080/api/import/enrollments \
+  -F "file=@/path/to/enrollments.xlsx"
+```
+

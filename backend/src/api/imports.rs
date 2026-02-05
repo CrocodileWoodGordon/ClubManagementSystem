@@ -1,32 +1,59 @@
 use axum::{
-    Router,
+    Json, Router,
     extract::{Multipart, State},
     http::StatusCode,
     routing::post,
 };
+use chrono::Datelike;
+use serde::Serialize;
 use sqlx::Row;
 use uuid::Uuid;
 
 use crate::{
-    api::ApiState, db::DbPool, error::AppError, services::excel_import_service::ExcelImportService,
+    api::ApiState,
+    db::DbPool,
+    error::AppError,
+    services::{ExcelImportService, StudentImportSummary},
 };
 
 async fn import_enrollments(
     State(state): State<ApiState>,
     mut multipart: Multipart,
 ) -> Result<StatusCode, AppError> {
-    let term_id = find_active_term(&state.pool).await?;
+    let term = find_active_term(&state.pool).await?;
     let mut service = ExcelImportService::new(&state.pool);
     service
-        .ingest_enrollments(term_id, "system", &mut multipart)
+        .ingest_enrollments(term.id, "system", &mut multipart)
         .await?;
     Ok(StatusCode::ACCEPTED)
 }
 
-async fn find_active_term(pool: &DbPool) -> Result<Uuid, AppError> {
+#[derive(Debug, Serialize)]
+struct StudentImportResponse {
+    summary: StudentImportSummary,
+}
+
+async fn import_students(
+    State(state): State<ApiState>,
+    mut multipart: Multipart,
+) -> Result<Json<StudentImportResponse>, AppError> {
+    let term = find_active_term(&state.pool).await?;
+    let mut service = ExcelImportService::new(&state.pool);
+    let summary = service
+        .ingest_students(term.id, term.academic_year, "system", &mut multipart)
+        .await?;
+    Ok(Json(StudentImportResponse { summary }))
+}
+
+struct ActiveTerm {
+    id: Uuid,
+    academic_year: i16,
+}
+
+async fn find_active_term(pool: &DbPool) -> Result<ActiveTerm, AppError> {
     let result = sqlx::query(
         r#"
-            SELECT id
+            SELECT id, start_date
             FROM terms
             WHERE is_active = true
             ORDER BY enrollment_start DESC
@@ -37,12 +64,25 @@ async fn find_active_term(pool: &DbPool) -> Result<Uuid, AppError> {
     .await
     .map_err(|err| AppError::Database(err.to_string()))?;
 
-    result
-        .and_then(|row| row.try_get::<Uuid, _>("id").ok())
-        .ok_or_else(|| AppError::Validation("未找到激活学期，无法导入报名数据".into()))
+    if let Some(row) = result {
+        let id: Uuid = row
+            .try_get("id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let start_date: chrono::NaiveDate = row
+            .try_get("start_date")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let academic_year = start_date.year() as i16;
+        Ok(ActiveTerm { id, academic_year })
+    } else {
+        Err(AppError::Validation(
+            "未找到激活学期，无法导入报名数据".into(),
+        ))
+    }
 }
 
 /// Handles Excel uploads from 问卷星 for both students + enrollments.
 pub fn router() -> Router<ApiState> {
-    Router::new().route("/enrollments", post(import_enrollments))
+    Router::new()
+        .route("/enrollments", post(import_enrollments))
+        .route("/students", post(import_students))
 }

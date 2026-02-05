@@ -2,8 +2,11 @@ use axum::extract::Multipart;
 use uuid::Uuid;
 
 use crate::{
-    db::DbPool, domain::EnrollmentImportOutcome, error::AppError,
-    services::EnrollmentImportService, utils::excel::ExcelWorkbook,
+    db::DbPool,
+    domain::EnrollmentImportOutcome,
+    error::AppError,
+    services::{EnrollmentImportService, StudentImportService, StudentImportSummary},
+    utils::excel::ExcelWorkbook,
 };
 
 /// 负责从 Multipart 中读取 Excel，并交由 EnrollmentImportService 落库。
@@ -11,6 +14,7 @@ use crate::{
 pub struct ExcelImportService<'a> {
     pool: &'a DbPool,
     enrollment_import: EnrollmentImportService,
+    student_import: StudentImportService,
 }
 
 impl<'a> ExcelImportService<'a> {
@@ -18,6 +22,7 @@ impl<'a> ExcelImportService<'a> {
         Self {
             pool,
             enrollment_import: EnrollmentImportService::new(),
+            student_import: StudentImportService::new(),
         }
     }
 
@@ -31,6 +36,27 @@ impl<'a> ExcelImportService<'a> {
         let workbook = ExcelWorkbook::from_bytes(bytes)?;
         self.enrollment_import
             .import_workbook(self.pool, term_id, workbook, created_by, &filename)
+            .await
+    }
+
+    pub async fn ingest_students(
+        &mut self,
+        term_id: Uuid,
+        academic_year: i16,
+        created_by: &str,
+        payload: &mut Multipart,
+    ) -> Result<StudentImportSummary, AppError> {
+        let (bytes, filename) = Self::read_first_file(payload).await?;
+        let workbook = ExcelWorkbook::from_bytes(bytes)?;
+        self.student_import
+            .import_students(
+                self.pool,
+                term_id,
+                academic_year,
+                workbook,
+                created_by,
+                &filename,
+            )
             .await
     }
 
