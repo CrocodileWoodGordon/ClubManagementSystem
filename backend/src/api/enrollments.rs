@@ -6,6 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::ApiState;
 use crate::domain::{Enrollment, EnrollmentStatus};
 use crate::services::enrollment_service::EnrollmentService;
 
@@ -33,7 +34,7 @@ async fn bulk_update_status(Json(payload): Json<UpdateEnrollmentStatusRequest>) 
 }
 
 /// Routes focused on enrollment lifecycle (PENDING/ACTIVE/DROPPED/TRANSFERRED).
-pub fn router() -> Router {
+pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/pending", get(list_pending_enrollments))
         .route("/status", post(bulk_update_status))

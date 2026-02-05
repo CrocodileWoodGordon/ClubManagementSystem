@@ -53,6 +53,8 @@
 - 2026-02-03：补充 `README.md` 运行手册，说明本地依赖、环境变量与调试命令，方便新人快速起步。
 - 2026-02-04：完成数据库重构设计，新增 `DATABASE.md` 作为 schema 真源，后续 migrations 与服务实现需严格参照。
 - 2026-02-04：依据 `DATABASE.md` 实现 `backend/migrations/0001_init.sql`，包含 terms/students/clubs/classes/enrollments/attendance/billing 等全部核心表。
+- 2026-02-05：扩展 `backend/src/domain/enrollment.rs`，定义报名状态、Excel 草稿与导入反馈结构，供服务层统一复用。
+- 2026-02-05：完成 Excel 报名导入服务（`utils/excel.rs`、`services/enrollment_import.rs`、`api/imports.rs` 等），支持解析问卷星 Excel -> `import_jobs`/`enrollments` 并记录错误，`cargo check` 通过验证。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

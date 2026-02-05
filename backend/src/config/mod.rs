@@ -9,7 +9,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn from_env() -> Result<Self, std::env::VarError> {
+    pub fn from_env() -> Result<Self, dotenvy::Error> {
         Ok(Self {
             database_url: var("DATABASE_URL")?,
             port: var("PORT")

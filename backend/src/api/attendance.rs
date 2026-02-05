@@ -3,6 +3,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::api::ApiState;
 use crate::domain::{AttendanceRecord, AttendanceStatus};
 use crate::services::attendance_service::AttendanceService;
 
@@ -46,7 +47,7 @@ async fn download_template(Path(_class_id): Path<Uuid>) -> StatusCode {
 }
 
 /// Attendance upload + template generation endpoints.
-pub fn router() -> Router {
+pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/bulk", post(bulk_upload))
         .route("/template/:class_id", post(download_template))

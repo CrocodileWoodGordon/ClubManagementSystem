@@ -7,6 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::ApiState;
 use crate::domain::{ClassInstance, Enrollment};
 use crate::services::class_assignment_service::ClassAssignmentService;
 
@@ -42,7 +43,7 @@ async fn assign_students(Json(payload): Json<AssignmentRequest>) -> StatusCode {
 }
 
 /// Manage class shells and student assignments.
-pub fn router() -> Router {
+pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/pending", get(list_pending_students))
         .route("/assign", post(assign_students))

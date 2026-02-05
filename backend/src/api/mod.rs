@@ -9,13 +9,22 @@ mod reports;
 
 use axum::Router;
 
+use crate::db::DbPool;
+
+#[derive(Clone)]
+pub struct ApiState {
+    pub pool: DbPool,
+}
+
 /// Compose every route tree under a single router instance.
-pub fn router() -> Router {
-    Router::new()
+pub fn router(pool: DbPool) -> Router {
+    let state = ApiState { pool };
+    Router::<ApiState>::new()
         .merge(health::router())
         .nest("/api/enrollments", enrollments::router())
         .nest("/api/classes", classes::router())
         .nest("/api/attendance", attendance::router())
         .nest("/api/import", imports::router())
         .nest("/api/reports", reports::router())
+        .with_state(state)
 }

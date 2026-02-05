@@ -1,6 +1,8 @@
 use axum::{Json, Router, routing::get};
 use serde::Serialize;
 
+use crate::api::ApiState;
+
 #[derive(Debug, Serialize)]
 struct HealthResponse {
     status: String,
@@ -15,6 +17,6 @@ async fn health_check() -> Json<HealthResponse> {
 }
 
 /// Basic `/health` probe consumed by Docker or monitoring scripts.
-pub fn router() -> Router {
+pub fn router() -> Router<ApiState> {
     Router::new().route("/health", get(health_check))
 }

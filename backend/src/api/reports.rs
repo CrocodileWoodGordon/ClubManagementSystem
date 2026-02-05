@@ -2,6 +2,7 @@ use axum::{Json, Router, extract::Query, routing::get};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::ApiState;
 use crate::services::reporting_service::ReportingService;
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +31,7 @@ async fn billing(Query(_query): Query<BillingQuery>) -> Json<SettlementResponse>
 }
 
 /// Financial + roster reports for admins.
-pub fn router() -> Router {
+pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/settlement", get(settlement))
         .route("/billing", get(billing))
