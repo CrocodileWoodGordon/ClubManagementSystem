@@ -43,6 +43,7 @@ pub enum EnrollmentImportStatus {
 pub struct Enrollment {
     pub id: Uuid,
     pub term_id: Uuid,
+    pub campus_id: Uuid,
     pub student_id: Uuid,
     pub club_id: Uuid,
     pub requested_weekday: u8,

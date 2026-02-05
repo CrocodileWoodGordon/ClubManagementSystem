@@ -133,6 +133,7 @@ struct StudentRecord {
     homeroom: String,
     full_name: String,
     student_code: Option<String>,
+    campus_id: Uuid,
 }
 
 struct StudentIndex {
@@ -144,7 +145,11 @@ impl StudentIndex {
     async fn load(tx: &mut Transaction<'_, Postgres>) -> Result<Self, AppError> {
         let rows = sqlx::query(
             r#"
-                SELECT s.id, s.full_name, s.student_code, h.display_name AS homeroom
+                SELECT s.id,
+                       s.full_name,
+                       s.student_code,
+                       h.display_name AS homeroom,
+                       h.campus_id
                 FROM students s
                 INNER JOIN homerooms h ON h.id = s.homeroom_id
                 WHERE s.status = 'ACTIVE'
@@ -167,6 +172,9 @@ impl StudentIndex {
             let homeroom: String = row
                 .try_get("homeroom")
                 .map_err(|err| AppError::Database(err.to_string()))?;
+            let campus_id: Uuid = row
+                .try_get("campus_id")
+                .map_err(|err| AppError::Database(err.to_string()))?;
             let student_code: Option<String> = row
                 .try_get("student_code")
                 .map_err(|err| AppError::Database(err.to_string()))?;
@@ -176,6 +184,7 @@ impl StudentIndex {
                 homeroom: homeroom.clone(),
                 full_name: full_name.clone(),
                 student_code: student_code.clone(),
+                campus_id,
             };
             let key = format!(
                 "{}::{}",
@@ -213,17 +222,18 @@ struct ClubRecord {
     id: Uuid,
     name: String,
     code: String,
+    campus_id: Uuid,
 }
 
 struct ClubIndex {
-    by_key: HashMap<String, ClubRecord>,
+    by_key: HashMap<String, Vec<ClubRecord>>,
 }
 
 impl ClubIndex {
     async fn load(tx: &mut Transaction<'_, Postgres>, term_id: Uuid) -> Result<Self, AppError> {
         let rows = sqlx::query(
             r#"
-                SELECT c.id, c.name, c.code
+                SELECT c.id, c.name, c.code, ct.campus_id
                 FROM clubs c
                 INNER JOIN club_terms ct ON ct.club_id = c.id
                 WHERE ct.term_id = $1
@@ -234,7 +244,7 @@ impl ClubIndex {
         .await
         .map_err(|err| AppError::Database(err.to_string()))?;
 
-        let mut by_key = HashMap::new();
+        let mut by_key: HashMap<String, Vec<ClubRecord>> = HashMap::new();
 
         for row in rows {
             let id: Uuid = row
@@ -246,20 +256,41 @@ impl ClubIndex {
             let code: String = row
                 .try_get("code")
                 .map_err(|err| AppError::Database(err.to_string()))?;
+            let campus_id: Uuid = row
+                .try_get("campus_id")
+                .map_err(|err| AppError::Database(err.to_string()))?;
             let record = ClubRecord {
                 id,
                 name: name.clone(),
                 code: code.clone(),
+                campus_id,
             };
-            by_key.insert(normalize_key(&code), record.clone());
-            by_key.insert(normalize_key(&name), record.clone());
+            insert_club_record(&mut by_key, &code, record.clone());
+            insert_club_record(&mut by_key, &name, record);
         }
 
         Ok(Self { by_key })
     }
 
-    fn find(&self, raw: &str) -> Option<&ClubRecord> {
-        self.by_key.get(&normalize_key(raw))
+    fn find(&self, raw: &str, campus_id: Uuid) -> Option<&ClubRecord> {
+        self.by_key
+            .get(&normalize_key(raw))
+            .and_then(|records| records.iter().find(|record| record.campus_id == campus_id))
+    }
+}
+
+fn insert_club_record(
+    map: &mut HashMap<String, Vec<ClubRecord>>,
+    raw_key: &str,
+    record: ClubRecord,
+) {
+    let key = normalize_key(raw_key);
+    let entry = map.entry(key).or_default();
+    let exists = entry
+        .iter()
+        .any(|existing| existing.campus_id == record.campus_id && existing.id == record.id);
+    if !exists {
+        entry.push(record);
     }
 }
 
@@ -342,7 +373,7 @@ async fn process_single_draft(
         }
     };
 
-    let club = match club_index.find(&draft.club_lookup_value) {
+    let club = match club_index.find(&draft.club_lookup_value, student.campus_id) {
         Some(record) => record,
         None => {
             let message = format!(
@@ -359,7 +390,10 @@ async fn process_single_draft(
         }
     };
 
-    let dedup_key = format!("{}::{}::{}", student.id, club.id, draft.requested_weekday);
+    let dedup_key = format!(
+        "{}::{}::{}::{}",
+        student.id, club.id, draft.requested_weekday, student.campus_id
+    );
     if !seen_pairs.insert(dedup_key.clone()) {
         return Ok(EnrollmentImportOutcome {
             source_row: draft.source_row,
@@ -375,13 +409,15 @@ async fn process_single_draft(
             SELECT id
             FROM enrollments
             WHERE term_id = $1
-              AND student_id = $2
-              AND club_id = $3
-              AND requested_weekday = $4
+              AND campus_id = $2
+              AND student_id = $3
+              AND club_id = $4
+              AND requested_weekday = $5
               AND status IN ('PENDING','ACTIVE')
         "#,
     )
     .bind(draft.term_id)
+    .bind(student.campus_id)
     .bind(student.id)
     .bind(club.id)
     .bind(draft.requested_weekday as i16)
@@ -401,12 +437,13 @@ async fn process_single_draft(
 
     let inserted_row = sqlx::query(
         r#"
-            INSERT INTO enrollments (term_id, student_id, club_id, requested_weekday, import_job_id)
-            VALUES ($1,$2,$3,$4,$5)
+            INSERT INTO enrollments (term_id, campus_id, student_id, club_id, requested_weekday, import_job_id)
+            VALUES ($1,$2,$3,$4,$5,$6)
             RETURNING id
         "#,
     )
     .bind(draft.term_id)
+    .bind(student.campus_id)
     .bind(student.id)
     .bind(club.id)
     .bind(draft.requested_weekday as i16)

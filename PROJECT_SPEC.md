@@ -15,6 +15,7 @@
 
 
 * **核心用户**: 管理员（用户父亲），负责数据导入、分班及导出报表。
+* **运营模式**: 同一学期包含多个校区（例如主校区、东校区），每个校区独立排班/结算，因此核心业务实体（年级、班级、报名、社团开课配置）都必须带 `campus_id` 维度。
 
 ---
 
@@ -38,7 +39,7 @@
 ### 2.2 阶段二：智能/手动分班 (Class Assignment)
 
 * **操作界面**:
-* 按“社团 + 星期”筛选（例如：显示“周一 机器人班”的所有 150 名学生）。
+* 按“校区 + 社团 + 星期”筛选（例如：显示“主校区 · 周一 机器人班”的所有 150 名学生）。
 * **列表显示**: 学生姓名、原班级、当前社团班级编号（默认为空/待定）。
 * **批量操作**: 支持勾选多名学生 -> 输入班级编号 (如 1, 2, 3) -> 提交。
 
@@ -88,12 +89,21 @@
 
 ### 3.1 核心实体表
 
+#### `campuses` (校区表)
+
+* `id`: UUID
+* `code`: String（如 `main_campus`）
+* `name`: String（中文名）
+* `address` / `contact`: 可选字段，方便报表展示
+* **说明**: 所有与教学地点相关的实体（年级班级、社团开课配置、具体班级、报名记录）都需要指向某个 `campus_id`，以支撑“每学期每个校区都开社团”的管理模式。
+
 #### `students` (学生表)
 
 * `id`: UUID
 * `original_class`: String (e.g., "3年2班")
 * `name`: String
 * `is_teacher_child`: Boolean (是否教师子女)
+* `校区归属`: 通过其所属 `homeroom.campus_id` 推断（Excel 导入时按照该校区筛选可报社团）
 * *Index*: `(original_class, name)` 用于 Excel 解析匹配。
 
 #### `clubs` (社团定义表)
@@ -106,16 +116,18 @@
 #### `classes` (具体班级实例表)
 
 * `id`: UUID
+* `campus_id`: FK -> campuses.id（同一社团在不同校区可重名）
 * `club_id`: FK -> clubs.id
 * `day_of_week`: Integer (1-5)
 * `batch_number`: String (班级编号，e.g., "1班", "2班")
 * `time_slot`: String (e.g., "16:00-17:30")
 * `location`: String (e.g., "科技楼301")
-* *Note*: 这是实际分班后的实体。
+* *Note*: 这是实际分班后的实体，同一 `class_code` 只在同一校区+学期内唯一。
 
 #### `enrollments` (选课/报名表)
 
 * `id`: UUID
+* `campus_id`: FK -> campuses.id（Excel 导入时根据学生校区填入）
 * `student_id`: FK -> students.id
 * `class_id`: FK -> classes.id (分班前可能指向一个虚拟的"待定"班级或允许 NULL)
 * `status`: Enum (`PENDING`, `ACTIVE`, `DROPPED`, `TRANSFERRED`)

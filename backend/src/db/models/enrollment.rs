@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EnrollmentRow {
     pub id: Uuid,
+    pub campus_id: Uuid,
     pub student_id: Uuid,
     pub class_id: Option<Uuid>,
     pub status: String,

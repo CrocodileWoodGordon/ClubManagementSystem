@@ -13,8 +13,22 @@
 ### 2.1 全局与学期维度
 | 表名 | 说明 |
 | --- | --- |
+| `campuses` | 校区主数据，描述不同校区的代码、名称、地址。 |
 | `terms` | 学期/学段定义，所有业务数据均关联 term_id，便于按学期隔离。 |
 | `homerooms` | 年级-班级定义。学生指向 homeroom，Excel 解析时以 `(homeroom.display_name, student.name)` 做匹配。 |
+
+#### `campuses`
+| 字段 | 类型 | 约束 | 备注 |
+| --- | --- | --- | --- |
+| `id` | uuid | PK | |
+| `code` | text | UNIQUE NOT NULL | 例如 `main_campus`、`east` |
+| `name` | text | NOT NULL | 校区中文名 |
+| `short_name` | text | NULLABLE | |
+| `address` | text | NULLABLE | |
+| `contact_name` | text | NULLABLE | |
+| `contact_phone` | text | NULLABLE | |
+| `created_at` | timestamptz | default now() | |
+| `updated_at` | timestamptz | default now() | trigger 自动更新时间 |
 
 #### `terms`
 | 字段 | 类型 | 约束 | 备注 |
@@ -34,11 +48,13 @@
 | 字段 | 类型 | 约束 | 备注 |
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
+| `campus_id` | uuid | FK → campuses.id ON DELETE RESTRICT | 表示该年级班级所属校区 |
 | `academic_year` | smallint | NOT NULL | 学年，如 2024 |
 | `grade_label` | text | NOT NULL | “三年级” |
 | `class_label` | text | NOT NULL | “2 班” |
 | `display_name` | text | UNIQUE(academic_year, display_name) | 例如 “三2班” |
 | `created_at` | timestamptz | default now() | |
+| 组合唯一 | (`campus_id`, `academic_year`, `display_name`) | 同一校区同一学年不可重复 |
 
 ### 2.2 基础主数据
 | 表名 | 说明 |
@@ -78,12 +94,13 @@
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
 | `term_id` | uuid | FK → terms.id ON DELETE CASCADE | |
+| `campus_id` | uuid | FK → campuses.id ON DELETE RESTRICT | 表示该社团配置适用的校区 |
 | `club_id` | uuid | FK → clubs.id ON DELETE CASCADE | |
 | `material_fee` | numeric(10,2) | default clubs.material_fee | 学期覆盖 |
 | `price_per_session` | numeric(10,2) | default clubs.price_per_session | |
 | `capacity` | integer | NULLABLE | 整体容量上限 |
 | `notes` | text | | |
-| UNIQUE(term_id, club_id) | | 防止重复配置 |
+| UNIQUE(term_id, campus_id, club_id) | | 同一学期同一校区的社团配置唯一 |
 
 ### 2.3 排课相关
 | 表名 | 说明 |
@@ -96,6 +113,7 @@
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
 | `term_id` | uuid | FK → terms.id ON DELETE CASCADE | |
+| `campus_id` | uuid | FK → campuses.id ON DELETE RESTRICT | |
 | `club_id` | uuid | FK → clubs.id | |
 | `class_code` | text | NOT NULL | “1 班”、“A 组” |
 | `weekday` | smallint | CHECK 1-7 | 1=周一 |
@@ -104,8 +122,8 @@
 | `capacity` | integer | NULLABLE | |
 | `status` | text | CHECK IN (PLANNED,ACTIVE,ARCHIVED) | |
 | `notes` | text | | |
-| UNIQUE(term_id, club_id, class_code) | | |
-| INDEX(term_id, club_id, weekday) | | 筛选待分班数据 |
+| UNIQUE(term_id, campus_id, club_id, class_code) | | |
+| INDEX(term_id, campus_id, club_id, weekday) | | 筛选待分班数据 |
 
 #### `class_meetings`
 | 字段 | 类型 | 约束 | 备注 |
@@ -154,6 +172,7 @@
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
 | `term_id` | uuid | FK → terms.id | |
+| `campus_id` | uuid | FK → campuses.id | Excel 导入时根据学生所在校区赋值 |
 | `student_id` | uuid | FK → students.id | |
 | `club_id` | uuid | FK → clubs.id | |
 | `requested_weekday` | smallint | CHECK 1-7 | 与 Excel 列对应 |
@@ -166,8 +185,8 @@
 | `material_fee_state` | text | CHECK IN (UNSET,CHARGED,REFUNDED) | 控制材料费是否重复收取 |
 | `tuition_grace_applied` | boolean | default false | 三节课免课时费是否已用 |
 | `created_at` / `updated_at` | timestamptz | default now() | |
-| 索引 | (`term_id`, `status`, `requested_weekday`) | 快速筛选待分班 |
-| 部分唯一索引 | UNIQUE(term_id, student_id, club_id, requested_weekday) WHERE status IN (PENDING,ACTIVE) | 保证同一时段仅一条有效报名 |
+| 索引 | (`term_id`, `campus_id`, `status`, `requested_weekday`) | 快速筛选待分班 |
+| 部分唯一索引 | UNIQUE(term_id, campus_id, student_id, club_id, requested_weekday) WHERE status IN (PENDING,ACTIVE) | 保证同校区同一时段仅一条有效报名 |
 
 #### `enrollment_status_history`
 | 字段 | 类型 | 约束 |
@@ -234,20 +253,20 @@
 - `task_logs`: 记录长任务执行日志（考勤表生成/导出）。若实现 `src/tasks` 需要，可包含 `task_type`, `payload`, `status`, `started_at`, `finished_at`, `result`。
 
 ## 3. 业务映射
-1. **Excel 报名导入**：导入结果写入 `import_jobs`/`import_job_errors`，成功行创建 `enrollments`（status = `PENDING`，`class_id` 空，按列写入 `requested_weekday`）。
-2. **分班**：前端筛选基于 `enrollments` 的 `(term_id, club_id, requested_weekday, status=PENDING)`。批量操作创建/更新 `classes` 后，将选中 enrollment 的 `class_id`、`status` 设为 `ACTIVE`。
+1. **Excel 报名导入**：导入结果写入 `import_jobs`/`import_job_errors`，成功行创建 `enrollments`（status = `PENDING`，`class_id` 空，按列写入 `requested_weekday`），并根据匹配到的学生 `homeroom.campus_id` 自动填写 `campus_id`。
+2. **分班**：前端筛选基于 `enrollments` 的 `(term_id, campus_id, club_id, requested_weekday, status=PENDING)`。批量操作创建/更新 `classes`（同样包含 `campus_id`）后，将选中 enrollment 的 `class_id`、`status` 设为 `ACTIVE`。
 3. **考勤**：由 `classes` 生成 `class_meetings`，导入明细写入 `attendance_records`。即便退课，`attendance_records` 仍引用原 enrollment。
 4. **换课/退课**：`enrollments` 的 `status` 切换并写入 `enrollment_status_history`，如换社团则创建新 enrollment，`transferred_from_id` 指向旧记录并沿用 `material_fee_state`。同社团换班只更新 `class_id`。
 5. **结算**：触发 `billing_runs`，遍历 `enrollments` + `attendance_records` 生成 `billing_items`。教师子女 (`students.is_teacher_child`) 与三节课免课 (`clubs.grace_sessions`) 的逻辑写入 `policy_snapshot` 以备审计。
 
 ## 4. 索引与约束建议
 - 为所有外键列建立 BTree 索引（如 `enrollments.student_id`, `attendance_records.class_meeting_id`）。
-- 使用部分索引保证唯一性：`CREATE UNIQUE INDEX ux_active_enrollment ON enrollments(term_id, student_id, club_id, requested_weekday) WHERE status IN (PENDING,ACTIVE);`
+- 使用部分索引保证唯一性：`CREATE UNIQUE INDEX ux_active_enrollment ON enrollments(term_id, campus_id, student_id, club_id, requested_weekday) WHERE status IN (PENDING,ACTIVE);`
 - 对 `attendance_records` 增加 `WHERE status=PRESENT` 的部分索引用于统计。
 - `billing_items` 可创建 `GIN(policy_snapshot)` 以支撑 JSON 搜索（可选）。
 
 ## 5. 实施顺序建议
-1. 先建 `terms`、`homerooms`、`students`、`clubs`、`classes` 等基础表。 
+1. 先建 `campuses`、`terms`、`homerooms`、`students`、`clubs`、`classes` 等基础表。 
 2. 随后创建 `enrollments`、`import_jobs` 等报名链路。 
 3. 再补充 `class_meetings`、`attendance_records`。 
 4. 最后实现 `billing_runs`、`billing_items` 等结算结构。

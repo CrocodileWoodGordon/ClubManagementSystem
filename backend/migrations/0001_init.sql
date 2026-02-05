@@ -31,8 +31,25 @@ CREATE TRIGGER trg_terms_updated_at
 BEFORE UPDATE ON terms
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TABLE campuses (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    code text NOT NULL UNIQUE,
+    name text NOT NULL,
+    short_name text,
+    address text,
+    contact_name text,
+    contact_phone text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_campuses_updated_at
+BEFORE UPDATE ON campuses
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TABLE homerooms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    campus_id uuid NOT NULL REFERENCES campuses(id) ON DELETE RESTRICT,
     academic_year smallint NOT NULL,
     grade_label text NOT NULL,
     class_label text NOT NULL,
@@ -40,7 +57,8 @@ CREATE TABLE homerooms (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX ux_homerooms_year_display ON homerooms (academic_year, display_name);
+CREATE UNIQUE INDEX ux_homerooms_campus_year_display
+    ON homerooms (campus_id, academic_year, display_name);
 
 -- 2. 学生、社团定义 ---------------------------------------------------------
 CREATE TABLE students (
@@ -78,19 +96,21 @@ CREATE TABLE clubs (
 CREATE TABLE club_terms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     term_id uuid NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    campus_id uuid NOT NULL REFERENCES campuses(id) ON DELETE RESTRICT,
     club_id uuid NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
     material_fee numeric(10,2) NOT NULL DEFAULT 0,
     price_per_session numeric(10,2) NOT NULL DEFAULT 0,
     capacity integer,
     notes text,
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (term_id, club_id)
+    UNIQUE (term_id, campus_id, club_id)
 );
 
 -- 3. 班级与排课 -------------------------------------------------------------
 CREATE TABLE classes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     term_id uuid NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    campus_id uuid NOT NULL REFERENCES campuses(id) ON DELETE RESTRICT,
     club_id uuid NOT NULL REFERENCES clubs(id) ON DELETE RESTRICT,
     class_code text NOT NULL,
     weekday smallint NOT NULL CHECK (weekday BETWEEN 1 AND 7),
@@ -102,10 +122,10 @@ CREATE TABLE classes (
     notes text,
     created_at timestamptz NOT NULL DEFAULT now(),
     CHECK (start_time < end_time),
-    UNIQUE (term_id, club_id, class_code)
+    UNIQUE (term_id, campus_id, club_id, class_code)
 );
 
-CREATE INDEX idx_classes_lookup ON classes (term_id, club_id, weekday);
+CREATE INDEX idx_classes_lookup ON classes (term_id, campus_id, club_id, weekday);
 
 CREATE TABLE class_meetings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -149,6 +169,7 @@ CREATE INDEX idx_import_job_errors_job_id ON import_job_errors (job_id);
 CREATE TABLE enrollments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     term_id uuid NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    campus_id uuid NOT NULL REFERENCES campuses(id) ON DELETE RESTRICT,
     student_id uuid NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
     club_id uuid NOT NULL REFERENCES clubs(id) ON DELETE RESTRICT,
     requested_weekday smallint NOT NULL CHECK (requested_weekday BETWEEN 1 AND 7),
@@ -164,10 +185,10 @@ CREATE TABLE enrollments (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_enrollments_lookup ON enrollments (term_id, status, requested_weekday);
+CREATE INDEX idx_enrollments_lookup ON enrollments (term_id, campus_id, status, requested_weekday);
 CREATE INDEX idx_enrollments_class ON enrollments (class_id);
 CREATE UNIQUE INDEX ux_enrollments_active
-    ON enrollments (term_id, student_id, club_id, requested_weekday)
+    ON enrollments (term_id, campus_id, student_id, club_id, requested_weekday)
     WHERE status IN ('PENDING','ACTIVE');
 
 CREATE TRIGGER trg_enrollments_updated_at
