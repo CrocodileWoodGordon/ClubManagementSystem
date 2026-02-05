@@ -58,6 +58,7 @@
 - 2026-02-05：完成 Excel 报名导入服务（`utils/excel.rs`、`services/enrollment_import.rs`、`api/imports.rs` 等），支持解析问卷星 Excel -> `import_jobs`/`enrollments` 并记录错误，`cargo check` 通过验证。
 - 2026-02-05：新增学生 Excel 导入链路（`services/student_import.rs` + `/api/import/students`），支持按校区/班级/姓名写入 `homerooms` 与 `students`，自动复用激活学期的学年信息。
 - 2026-02-05：落地多校区能力，新增 `campuses` 表并为 `homerooms`/`club_terms`/`classes`/`enrollments` 添加 `campus_id` 外键；同步更新 `DATABASE.md`、`PROJECT_SPEC.md` 与报名导入服务以按校区匹配社团。
+- 2026-02-05：新增学期/校区管理接口（`/api/admin/terms`、`/api/admin/campuses/*`）以及 `API.md` 文档，后续前端可直接创建学期、维护校区信息。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -65,3 +66,4 @@
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（接口仍为占位，尚未实现筛选逻辑）。
 - `/api/import/students` 接收 `file` 字段的 Excel，A 列校区（匹配 `campuses.code/name`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。
+- `/api/admin/terms` 列出/创建学期；`/api/admin/campuses/:id` 支持更新校区名称、地址及联系人信息，准备在前端提供直接维护入口。

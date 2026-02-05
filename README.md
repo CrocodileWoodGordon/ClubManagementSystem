@@ -45,18 +45,3 @@ cargo sqlx migrate run
 docker compose exec db psql -U admin -d club_management -c "\d+ campuses"
 ```
 
-### Excel 导入 API 自测
-学生名单导入接口：`POST http://localhost:8080/api/import/students`，表格仅需三列（校区、班级、姓名）。
-
-```bash
-curl -X POST http://localhost:8080/api/import/students \
-  -F "file=@/path/to/students.xlsx"
-```
-
-报名导入接口：`POST http://localhost:8080/api/import/enrollments`，格式参见 `PROJECT_SPEC.md`。
-
-```bash
-curl -X POST http://localhost:8080/api/import/enrollments \
-  -F "file=@/path/to/enrollments.xlsx"
-```
-
