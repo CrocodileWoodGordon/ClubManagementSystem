@@ -9,5 +9,8 @@ pub use attendance::{AttendanceRecord, AttendanceStatus};
 pub use billing::FeeBreakdown;
 pub use class_instance::ClassInstance;
 pub use club::Club;
-pub use enrollment::{Enrollment, EnrollmentStatus};
+pub use enrollment::{
+    Enrollment, EnrollmentDraft, EnrollmentImportOutcome, EnrollmentImportStatus, EnrollmentStatus,
+    MaterialFeeState,
+};
 pub use student::StudentProfile;
