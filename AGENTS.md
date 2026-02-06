@@ -65,11 +65,13 @@
 - 2026-02-06：Excel 上传兼容 `.xls/.xlsx`，失败时自动回退到临时文件解析，同时新增 `.gitignore` 忽略 `target/` 与 `data2import/`。
 - 2026-02-06：问卷星报名导入支持列映射（默认 E/H~L），可通过 Multipart `config` JSON 自定义列；若 Excel 中出现新社团，会自动创建 `clubs`/`club_terms` 并按校区/星期存量去重。
 - 2026-02-06：完善报名查询接口，`GET /api/enrollments/pending` 可按学期、校区、班级、社团、星期、学生姓名筛选，并新增 `/api/enrollments/summary` 返回“校区+社团+星期”统计结果供横向对比。
+- 2026-02-06：新增导入占位文本配置（`GET/PUT /api/import/placeholders`），可查询或更新 Excel 中代表空报名的字符串；导入流程会实时读取该配置并跳过占位值。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
 - `frontend/components/forms/BulkAssignmentForm.tsx` 预期调用 `/api/classes/assign` 批量设置班级编号（暂未接线）。
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（`/api/enrollments/pending` 已支持多条件筛选）。
+- `/api/import/placeholders` 返回当前导入场景使用的占位文本；PUT 接口可让管理员自定义占位字符串，前端如需展示可直接读取该接口。
 - `/api/import/students` 接收 `file` 字段的 Excel（支持 `.xls/.xlsx`），A 列填校区简称（匹配 `campuses.short_name`，也兼容 `code`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。
 - `/api/admin/terms` 列出/创建学期；`/api/admin/campuses` 新增校区；`/api/admin/campuses/{id}` 支持更新校区名称、地址及联系人信息，准备在前端提供直接维护入口。

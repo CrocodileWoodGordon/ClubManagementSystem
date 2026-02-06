@@ -167,6 +167,15 @@
 | `error_message` | text | |
 | `raw_payload` | jsonb | 原始行数据 |
 
+#### `import_placeholder_sets`
+| 字段 | 类型 | 约束 | 备注 |
+| --- | --- | --- | --- |
+| `id` | uuid | PK | |
+| `import_type` | text | UNIQUE NOT NULL | 目前支持 `ENROLLMENTS`、`STUDENTS` |
+| `placeholders` | text[] | NOT NULL | 存储去重后的占位字符串 |
+| `updated_by` | text | | |
+| `updated_at` | timestamptz | default now() | |
+
 #### `enrollments`
 | 字段 | 类型 | 约束 | 备注 |
 | --- | --- | --- | --- |

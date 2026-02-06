@@ -6,7 +6,11 @@ use crate::{
     domain::EnrollmentImportOutcome,
     error::AppError,
     services::{
-        EnrollmentImportColumns, EnrollmentImportService, StudentImportService,
+        EnrollmentImportColumns,
+        EnrollmentImportService,
+        ImportPlaceholderService,
+        ImportPlaceholderType,
+        StudentImportService,
         StudentImportSummary,
     },
     utils::excel::ExcelWorkbook,
@@ -37,6 +41,9 @@ impl<'a> ExcelImportService<'a> {
     ) -> Result<Vec<EnrollmentImportOutcome>, AppError> {
         let upload = Self::read_enrollment_upload(payload).await?;
         let workbook = ExcelWorkbook::from_bytes(upload.bytes, Some(&upload.filename))?;
+        let placeholders = ImportPlaceholderService::new(self.pool)
+            .resolved_values(ImportPlaceholderType::Enrollments)
+            .await?;
         self.enrollment_import
             .import_workbook(
                 self.pool,
@@ -45,6 +52,7 @@ impl<'a> ExcelImportService<'a> {
                 created_by,
                 &upload.filename,
                 upload.columns,
+                placeholders,
             )
             .await
     }

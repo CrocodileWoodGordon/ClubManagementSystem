@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Multipart, State},
-    routing::post,
+    extract::{Multipart, Path, Query, State},
+    routing::{get, post, put},
     Json, Router,
 };
 use chrono::Datelike;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -13,12 +13,39 @@ use crate::{
     db::DbPool,
     domain::EnrollmentImportOutcome,
     error::AppError,
-    services::{ExcelImportService, StudentImportSummary},
+    services::{
+        ExcelImportService,
+        ImportPlaceholderConfig,
+        ImportPlaceholderService,
+        ImportPlaceholderType,
+        StudentImportSummary,
+    },
 };
 
 #[derive(Debug, Serialize)]
 struct EnrollmentImportResponse {
     outcomes: Vec<EnrollmentImportOutcome>,
+}
+
+#[derive(Debug, Serialize)]
+struct PlaceholderListResponse {
+    data: Vec<ImportPlaceholderConfig>,
+}
+
+#[derive(Debug, Serialize)]
+struct PlaceholderSingleResponse {
+    data: ImportPlaceholderConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaceholderQuery {
+    import_type: Option<ImportPlaceholderType>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdatePlaceholdersRequest {
+    placeholders: Vec<String>,
+    updated_by: Option<String>,
 }
 
 async fn import_enrollments(
@@ -48,6 +75,32 @@ async fn import_students(
         .ingest_students(term.id, term.academic_year, "system", &mut multipart)
         .await?;
     Ok(Json(StudentImportResponse { summary }))
+}
+
+async fn list_placeholders(
+    State(state): State<ApiState>,
+    Query(query): Query<PlaceholderQuery>,
+) -> Result<Json<PlaceholderListResponse>, AppError> {
+    let service = ImportPlaceholderService::new(&state.pool);
+    let data = if let Some(import_type) = query.import_type {
+        vec![service.get_or_default(import_type).await?]
+    } else {
+        service.list_all().await?
+    };
+    Ok(Json(PlaceholderListResponse { data }))
+}
+
+async fn update_placeholders(
+    State(state): State<ApiState>,
+    Path(import_type): Path<ImportPlaceholderType>,
+    Json(payload): Json<UpdatePlaceholdersRequest>,
+) -> Result<Json<PlaceholderSingleResponse>, AppError> {
+    let updated_by = payload.updated_by.as_deref().unwrap_or("system");
+    let service = ImportPlaceholderService::new(&state.pool);
+    let data = service
+        .replace(import_type, payload.placeholders, updated_by)
+        .await?;
+    Ok(Json(PlaceholderSingleResponse { data }))
 }
 
 struct ActiveTerm {
@@ -90,4 +143,6 @@ pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/enrollments", post(import_enrollments))
         .route("/students", post(import_students))
+        .route("/placeholders", get(list_placeholders))
+        .route("/placeholders/:import_type", put(update_placeholders))
 }

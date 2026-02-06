@@ -76,6 +76,31 @@ impl EnrollmentImportColumns {
     }
 }
 
+#[derive(Debug, Clone)]
+struct PlaceholderLookup {
+    normalized: HashSet<String>,
+}
+
+impl PlaceholderLookup {
+    fn new(values: &[String]) -> Self {
+        let normalized = values
+            .iter()
+            .map(|value| normalize_placeholder_key(value))
+            .filter(|value| !value.is_empty())
+            .collect();
+        Self { normalized }
+    }
+
+    fn is_placeholder(&self, value: &str) -> bool {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return true;
+        }
+        let normalized = normalize_placeholder_key(trimmed);
+        self.normalized.contains(&normalized)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawColumnConfig {
@@ -126,8 +151,11 @@ impl EnrollmentImportService {
         created_by: &str,
         source_filename: &str,
         columns: EnrollmentImportColumns,
+        placeholders: Vec<String>,
     ) -> Result<Vec<EnrollmentImportOutcome>, AppError> {
-        let (drafts, mut outcomes) = parse_workbook(term_id, &workbook, &columns);
+        let placeholder_lookup = PlaceholderLookup::new(&placeholders);
+        let (drafts, mut outcomes) =
+            parse_workbook(term_id, &workbook, &columns, &placeholder_lookup);
         let total_rows = (drafts.len() + outcomes.len()) as i32;
 
         if total_rows == 0 {
@@ -516,6 +544,7 @@ fn parse_workbook(
     term_id: Uuid,
     workbook: &ExcelWorkbook,
     columns: &EnrollmentImportColumns,
+    placeholders: &PlaceholderLookup,
 ) -> (Vec<EnrollmentDraft>, Vec<EnrollmentImportOutcome>) {
     let sheet = workbook.primary_sheet();
     let mut drafts = Vec::new();
@@ -547,7 +576,7 @@ fn parse_workbook(
                 .get(col_index)
                 .map(|cell| cell.trim())
                 .unwrap_or_default();
-            if choice_is_empty(value) {
+            if placeholders.is_placeholder(value) {
                 continue;
             }
 
@@ -777,20 +806,6 @@ fn normalize_key(input: &str) -> String {
         .to_lowercase()
 }
 
-fn choice_is_empty(value: &str) -> bool {
-    let normalized = value.trim();
-    normalized.is_empty()
-        || matches!(
-            normalized,
-            "-"
-                | "—"
-                | "——"
-                | "无"
-                | "N/A"
-                | "n/a"
-                | "NA"
-                | "na"
-                | "(空)"
-                | "（空）"
-        )
+fn normalize_placeholder_key(value: &str) -> String {
+    value.trim().to_lowercase()
 }

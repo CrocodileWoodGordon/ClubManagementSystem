@@ -4,6 +4,7 @@ pub mod class_assignment_service;
 pub mod enrollment_import;
 pub mod enrollment_service;
 pub mod excel_import_service;
+pub mod import_placeholder_service;
 pub mod reporting_service;
 pub mod student_import;
 
@@ -19,5 +20,10 @@ pub use enrollment_service::{
     PendingEnrollmentDto,
 };
 pub use excel_import_service::ExcelImportService;
+pub use import_placeholder_service::{
+    ImportPlaceholderConfig,
+    ImportPlaceholderService,
+    ImportPlaceholderType,
+};
 pub use reporting_service::ReportingService;
 pub use student_import::{StudentImportService, StudentImportSummary};

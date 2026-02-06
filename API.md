@@ -23,6 +23,10 @@
   上传“校区简称/班级/姓名” Excel（支持 `.xls` 与 `.xlsx`，表头占第一行）。服务优先使用 `campuses.short_name`（兼容 `code`）匹配校区，自动创建/更新 `homerooms` 并写入 `students`；响应包含导入汇总（total/success/skipped/errors）。
 - `POST /api/import/enrollments`  
   上传问卷星报名 Excel（默认 E 列为“班级+姓名”，H~L 列为周一~周五社团，可通过 Multipart `config` 字段传入 JSON 自定义列映射）。返回逐行 `EnrollmentImportOutcome`，并在 `import_jobs` 中记录任务，遇到新社团会自动创建 `clubs`/`club_terms`。
+- `GET /api/import/placeholders`  
+  查询各导入类型的占位文本（默认包含 `ENROLLMENTS`）。可用 `?import_type=ENROLLMENTS` 单独获取某一类型。
+- `PUT /api/import/placeholders/{import_type}`  
+  传入 `{ "placeholders": ["-", "(空)"] }` 全量替换指定类型的占位文本，更新后导入逻辑立即生效。
 
 ## 5. 报名 / 分班接口
 - `GET /api/enrollments/pending`  
