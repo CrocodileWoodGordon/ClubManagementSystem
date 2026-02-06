@@ -33,7 +33,7 @@ impl<'a> ExcelImportService<'a> {
         payload: &mut Multipart,
     ) -> Result<Vec<EnrollmentImportOutcome>, AppError> {
         let (bytes, filename) = Self::read_first_file(payload).await?;
-        let workbook = ExcelWorkbook::from_bytes(bytes)?;
+        let workbook = ExcelWorkbook::from_bytes(bytes, Some(&filename))?;
         self.enrollment_import
             .import_workbook(self.pool, term_id, workbook, created_by, &filename)
             .await
@@ -47,7 +47,7 @@ impl<'a> ExcelImportService<'a> {
         payload: &mut Multipart,
     ) -> Result<StudentImportSummary, AppError> {
         let (bytes, filename) = Self::read_first_file(payload).await?;
-        let workbook = ExcelWorkbook::from_bytes(bytes)?;
+        let workbook = ExcelWorkbook::from_bytes(bytes, Some(&filename))?;
         self.student_import
             .import_students(
                 self.pool,

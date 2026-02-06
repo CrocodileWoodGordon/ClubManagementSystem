@@ -1,6 +1,11 @@
-use std::io::Cursor;
+use std::{
+    fs,
+    io::Cursor,
+    path::Path,
+};
 
-use calamine::{Data, Reader, open_workbook_auto_from_rs};
+use calamine::{Data, Reader, Sheets, open_workbook_auto, open_workbook_auto_from_rs};
+use uuid::Uuid;
 
 use crate::error::AppError;
 
@@ -16,10 +21,48 @@ pub struct ExcelWorkbook {
 }
 
 impl ExcelWorkbook {
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, AppError> {
-        let cursor = Cursor::new(bytes);
-        let mut workbook = open_workbook_auto_from_rs(cursor)
+    pub fn from_bytes(bytes: Vec<u8>, file_name: Option<&str>) -> Result<Self, AppError> {
+        let cursor = Cursor::new(bytes.clone());
+        match Self::from_reader(cursor) {
+            Ok(workbook) => Ok(workbook),
+            Err(primary_err) => match Self::from_temp_file(&bytes, file_name) {
+                Ok(workbook) => Ok(workbook),
+                Err(fallback_err) => Err(AppError::Parsing(format!(
+                    "{}；回退方案失败: {}",
+                    primary_err, fallback_err
+                ))),
+            },
+        }
+    }
+
+    fn from_reader<R>(reader: R) -> Result<Self, AppError>
+    where
+        R: std::io::Read + std::io::Seek + Clone,
+    {
+        let workbook = open_workbook_auto_from_rs(reader)
             .map_err(|err| AppError::Parsing(format!("Excel 打开失败: {}", err)))?;
+        Self::from_sheets(workbook)
+    }
+
+    fn from_temp_file(bytes: &[u8], file_name: Option<&str>) -> Result<Self, AppError> {
+        let extension = infer_extension(bytes, file_name);
+        let temp_path = std::env::temp_dir()
+            .join(format!("club_excel_{}.{}", Uuid::new_v4(), extension));
+        fs::write(&temp_path, bytes)
+            .map_err(|err| AppError::Parsing(format!("写入临时 Excel 文件失败: {}", err)))?;
+
+        let result = open_workbook_auto(&temp_path)
+            .map_err(|err| AppError::Parsing(format!("Excel 打开失败: {}", err)))
+            .and_then(Self::from_sheets);
+
+        let _ = fs::remove_file(&temp_path);
+        result
+    }
+
+    fn from_sheets<RS>(mut workbook: Sheets<RS>) -> Result<Self, AppError>
+    where
+        RS: std::io::Read + std::io::Seek,
+    {
         let sheet_names = workbook.sheet_names().to_owned();
         let mut sheets = Vec::with_capacity(sheet_names.len());
 
@@ -72,5 +115,24 @@ fn cell_to_string(cell: &Data) -> String {
         Data::DateTimeIso(value) => value.trim().to_string(),
         Data::DurationIso(value) => value.trim().to_string(),
         Data::Error(_) => String::new(),
+    }
+}
+
+fn infer_extension(bytes: &[u8], file_name: Option<&str>) -> String {
+    if let Some(name) = file_name {
+        if let Some(ext) = Path::new(name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+        {
+            return ext.to_lowercase();
+        }
+    }
+
+    if bytes.starts_with(b"\xD0\xCF\x11\xE0") {
+        "xls".into()
+    } else if bytes.starts_with(b"PK\x03\x04") {
+        "xlsx".into()
+    } else {
+        "xlsx".into()
     }
 }
