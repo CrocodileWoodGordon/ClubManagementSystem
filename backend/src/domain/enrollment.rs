@@ -70,6 +70,8 @@ pub struct EnrollmentDraft {
     /// Excel 的原始社团文本（可能是名称或编码），由导入服务解析为 club_id。
     pub club_lookup_value: String,
     pub source_row: u32,
+    /// Excel 原始“班级+姓名”字段，便于兜底匹配或错误提示。
+    pub raw_identifier: String,
 }
 
 /// 导入单行处理后的反馈，便于 API 返回详细错误。

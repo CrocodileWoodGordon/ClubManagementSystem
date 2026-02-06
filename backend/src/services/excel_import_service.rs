@@ -5,7 +5,10 @@ use crate::{
     db::DbPool,
     domain::EnrollmentImportOutcome,
     error::AppError,
-    services::{EnrollmentImportService, StudentImportService, StudentImportSummary},
+    services::{
+        EnrollmentImportColumns, EnrollmentImportService, StudentImportService,
+        StudentImportSummary,
+    },
     utils::excel::ExcelWorkbook,
 };
 
@@ -32,10 +35,17 @@ impl<'a> ExcelImportService<'a> {
         created_by: &str,
         payload: &mut Multipart,
     ) -> Result<Vec<EnrollmentImportOutcome>, AppError> {
-        let (bytes, filename) = Self::read_first_file(payload).await?;
-        let workbook = ExcelWorkbook::from_bytes(bytes, Some(&filename))?;
+        let upload = Self::read_enrollment_upload(payload).await?;
+        let workbook = ExcelWorkbook::from_bytes(upload.bytes, Some(&upload.filename))?;
         self.enrollment_import
-            .import_workbook(self.pool, term_id, workbook, created_by, &filename)
+            .import_workbook(
+                self.pool,
+                term_id,
+                workbook,
+                created_by,
+                &upload.filename,
+                upload.columns,
+            )
             .await
     }
 
@@ -58,6 +68,56 @@ impl<'a> ExcelImportService<'a> {
                 &filename,
             )
             .await
+    }
+
+    async fn read_enrollment_upload(
+        payload: &mut Multipart,
+    ) -> Result<EnrollmentUploadPayload, AppError> {
+        let mut file_bytes: Option<Vec<u8>> = None;
+        let mut filename: Option<String> = None;
+        let mut columns: Option<EnrollmentImportColumns> = None;
+
+        while let Some(field) = payload
+            .next_field()
+            .await
+            .map_err(|err| AppError::Validation(format!("读取上传字段失败: {}", err)))?
+        {
+            if field.name() == Some("config") {
+                let text = field.text().await.map_err(|err| {
+                    AppError::Validation(format!("读取列配置失败: {}", err))
+                })?;
+                if text.trim().is_empty() {
+                    continue;
+                }
+                let parsed = EnrollmentImportColumns::from_json(&text)?;
+                columns = Some(parsed);
+                continue;
+            }
+
+            let is_file_field =
+                field.file_name().is_some() || field.name().map(|name| name == "file").unwrap_or(false);
+            if is_file_field {
+                let resolved_name = field
+                    .file_name()
+                    .map(|name| name.to_string())
+                    .unwrap_or_else(|| "enrollments.xlsx".into());
+                let bytes = field.bytes().await.map_err(|err| {
+                    AppError::Validation(format!("读取 Excel 内容失败: {}", err))
+                })?;
+                file_bytes = Some(bytes.to_vec());
+                filename = Some(resolved_name);
+            }
+        }
+
+        let bytes = file_bytes.ok_or_else(|| {
+            AppError::Validation("未找到 Excel 文件字段，请确认表单包含 `file`".into())
+        })?;
+
+        Ok(EnrollmentUploadPayload {
+            bytes,
+            filename: filename.unwrap_or_else(|| "enrollments.xlsx".into()),
+            columns: columns.unwrap_or_default(),
+        })
     }
 
     async fn read_first_file(payload: &mut Multipart) -> Result<(Vec<u8>, String), AppError> {
@@ -85,4 +145,10 @@ impl<'a> ExcelImportService<'a> {
             "未找到 Excel 文件字段，请确认表单包含 `file`".into(),
         ))
     }
+}
+
+struct EnrollmentUploadPayload {
+    bytes: Vec<u8>,
+    filename: String,
+    columns: EnrollmentImportColumns,
 }

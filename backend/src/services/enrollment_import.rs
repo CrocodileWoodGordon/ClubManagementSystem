@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use serde::Deserialize;
 use serde_json::json;
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -11,13 +12,102 @@ use crate::{
     utils::excel::ExcelWorkbook,
 };
 
-const WEEKDAY_COLUMNS: [(usize, u8); 5] = [
-    (1, 1), // Monday
-    (2, 2),
-    (3, 3),
-    (4, 4),
-    (5, 5), // Friday
-];
+/// Excel 列配置，支持自定义“学生标识列”与星期列。
+#[derive(Debug, Clone)]
+pub struct EnrollmentImportColumns {
+    pub student_identifier_column: usize,
+    pub weekday_columns: Vec<(u8, usize)>,
+}
+
+impl Default for EnrollmentImportColumns {
+    fn default() -> Self {
+        Self {
+            student_identifier_column: column_label_to_index("E").unwrap_or(4),
+            weekday_columns: vec![
+                (1, column_label_to_index("H").unwrap_or(7)),
+                (2, column_label_to_index("I").unwrap_or(8)),
+                (3, column_label_to_index("J").unwrap_or(9)),
+                (4, column_label_to_index("K").unwrap_or(10)),
+                (5, column_label_to_index("L").unwrap_or(11)),
+            ],
+        }
+    }
+}
+
+impl EnrollmentImportColumns {
+    pub fn from_json(value: &str) -> Result<Self, AppError> {
+        let raw: RawColumnConfig = serde_json::from_str(value).map_err(|err| {
+            AppError::Validation(format!("列配置 JSON 解析失败: {}", err))
+        })?;
+        Self::from_raw(raw)
+    }
+
+    fn from_raw(raw: RawColumnConfig) -> Result<Self, AppError> {
+        let mut result = Self::default();
+
+        if let Some(column_ref) = raw.student_column {
+            result.student_identifier_column = column_ref
+                .to_index()
+                .map_err(|msg| AppError::Validation(msg))?;
+        }
+
+        if let Some(map) = raw.weekday_columns {
+            let mut resolved = Vec::new();
+            for (day_str, column_ref) in map {
+                let weekday = day_str.parse::<u8>().map_err(|_| {
+                    AppError::Validation(format!("星期键 `{}` 不是有效数字 (1-7)", day_str))
+                })?;
+                if !(1..=7).contains(&weekday) {
+                    return Err(AppError::Validation(format!(
+                        "星期键 `{}` 超出 1~7 范围",
+                        weekday
+                    )));
+                }
+                let column_index = column_ref
+                    .to_index()
+                    .map_err(|msg| AppError::Validation(msg))?;
+                resolved.push((weekday, column_index));
+            }
+            resolved.sort_by_key(|(weekday, _)| *weekday);
+            result.weekday_columns = resolved;
+        }
+
+        Ok(result)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawColumnConfig {
+    #[serde(default)]
+    student_column: Option<ColumnRef>,
+    #[serde(default)]
+    weekday_columns: Option<HashMap<String, ColumnRef>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ColumnRef {
+    Letter(String),
+    Index(u32),
+}
+
+impl ColumnRef {
+    fn to_index(&self) -> Result<usize, String> {
+        match self {
+            ColumnRef::Letter(letter) => column_label_to_index(letter).ok_or_else(|| {
+                format!("无法解析列字母 `{}`，仅支持 Excel 列名如 A、B...AA", letter)
+            }),
+            ColumnRef::Index(index) => {
+                if *index == 0 {
+                    Err("列索引最小为 1".into())
+                } else {
+                    Ok((*index as usize) - 1)
+                }
+            }
+        }
+    }
+}
 
 /// 核心报名导入服务：负责将 Excel 解析后的报名信息写入数据库。
 #[derive(Debug, Default)]
@@ -35,8 +125,9 @@ impl EnrollmentImportService {
         workbook: ExcelWorkbook,
         created_by: &str,
         source_filename: &str,
+        columns: EnrollmentImportColumns,
     ) -> Result<Vec<EnrollmentImportOutcome>, AppError> {
-        let (drafts, mut outcomes) = parse_workbook(term_id, &workbook);
+        let (drafts, mut outcomes) = parse_workbook(term_id, &workbook, &columns);
         let total_rows = (drafts.len() + outcomes.len()) as i32;
 
         if total_rows == 0 {
@@ -76,7 +167,7 @@ impl EnrollmentImportService {
         }
 
         let student_index = StudentIndex::load(&mut tx).await?;
-        let club_index = ClubIndex::load(&mut tx, term_id).await?;
+        let mut club_index = ClubIndex::load(&mut tx, term_id).await?;
         let mut seen_pairs = HashSet::new();
         let mut success_rows = 0;
         let mut any_failures = !outcomes.is_empty();
@@ -87,7 +178,7 @@ impl EnrollmentImportService {
                 job_id,
                 draft,
                 &student_index,
-                &club_index,
+                &mut club_index,
                 &mut seen_pairs,
             )
             .await?;
@@ -139,6 +230,7 @@ struct StudentRecord {
 struct StudentIndex {
     by_name: HashMap<String, StudentRecord>,
     by_code: HashMap<String, StudentRecord>,
+    by_compound: HashMap<String, StudentRecord>,
 }
 
 impl StudentIndex {
@@ -161,6 +253,7 @@ impl StudentIndex {
 
         let mut by_name = HashMap::new();
         let mut by_code = HashMap::new();
+        let mut by_compound = HashMap::new();
 
         for row in rows {
             let id: Uuid = row
@@ -193,12 +286,19 @@ impl StudentIndex {
             );
             by_name.insert(key, record.clone());
 
+            let compound_key = normalize_key(&format!("{}{}", homeroom, full_name));
+            by_compound.insert(compound_key, record.clone());
+
             if let Some(code) = student_code {
                 by_code.insert(normalize_key(&code), record.clone());
             }
         }
 
-        Ok(Self { by_name, by_code })
+        Ok(Self {
+            by_name,
+            by_code,
+            by_compound,
+        })
     }
 
     fn find(&self, draft: &EnrollmentDraft) -> Option<&StudentRecord> {
@@ -208,12 +308,25 @@ impl StudentIndex {
             }
         }
 
-        let key = format!(
-            "{}::{}",
-            normalize_key(&draft.homeroom_display_name),
-            normalize_key(&draft.student_full_name)
-        );
-        self.by_name.get(&key)
+        if !draft.homeroom_display_name.is_empty() && !draft.student_full_name.is_empty() {
+            let key = format!(
+                "{}::{}",
+                normalize_key(&draft.homeroom_display_name),
+                normalize_key(&draft.student_full_name)
+            );
+            if let Some(record) = self.by_name.get(&key) {
+                return Some(record);
+            }
+        }
+
+        if !draft.raw_identifier.is_empty() {
+            let compound_key = normalize_key(&draft.raw_identifier);
+            if let Some(record) = self.by_compound.get(&compound_key) {
+                return Some(record);
+            }
+        }
+
+        None
     }
 }
 
@@ -226,6 +339,7 @@ struct ClubRecord {
 }
 
 struct ClubIndex {
+    term_id: Uuid,
     by_key: HashMap<String, Vec<ClubRecord>>,
 }
 
@@ -269,13 +383,85 @@ impl ClubIndex {
             insert_club_record(&mut by_key, &name, record);
         }
 
-        Ok(Self { by_key })
+        Ok(Self { term_id, by_key })
     }
 
-    fn find(&self, raw: &str, campus_id: Uuid) -> Option<&ClubRecord> {
+    async fn resolve(
+        &mut self,
+        tx: &mut Transaction<'_, Postgres>,
+        campus_id: Uuid,
+        raw: &str,
+    ) -> Result<ClubRecord, AppError> {
+        if let Some(record) = self.find_cached(raw, campus_id) {
+            return Ok(record);
+        }
+
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::Validation(
+                "社团列存在空值，无法创建报名记录".into(),
+            ));
+        }
+
+        let club_row = sqlx::query(
+            r#"
+                INSERT INTO clubs (code, name)
+                VALUES ($1,$2)
+                ON CONFLICT (name)
+                DO UPDATE SET name = EXCLUDED.name
+                RETURNING id, name, code
+            "#,
+        )
+        .bind(generate_club_code(trimmed))
+        .bind(trimmed)
+        .fetch_one(tx.as_mut())
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let club_id: Uuid = club_row
+            .try_get("id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let club_name: String = club_row
+            .try_get("name")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let club_code: String = club_row
+            .try_get("code")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+
+        sqlx::query(
+            r#"
+                INSERT INTO club_terms (term_id, campus_id, club_id, material_fee, price_per_session)
+                VALUES ($1,$2,$3,0,0)
+                ON CONFLICT (term_id, campus_id, club_id)
+                DO NOTHING
+            "#,
+        )
+        .bind(self.term_id)
+        .bind(campus_id)
+        .bind(club_id)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let record = ClubRecord {
+            id: club_id,
+            name: club_name,
+            code: club_code,
+            campus_id,
+        };
+
+        insert_club_record(&mut self.by_key, &record.code, record.clone());
+        insert_club_record(&mut self.by_key, &record.name, record.clone());
+        insert_club_record(&mut self.by_key, trimmed, record.clone());
+
+        Ok(record)
+    }
+
+    fn find_cached(&self, raw: &str, campus_id: Uuid) -> Option<ClubRecord> {
         self.by_key
             .get(&normalize_key(raw))
             .and_then(|records| records.iter().find(|record| record.campus_id == campus_id))
+            .cloned()
     }
 }
 
@@ -294,13 +480,46 @@ fn insert_club_record(
     }
 }
 
+fn generate_club_code(raw: &str) -> String {
+    let ascii_prefix: String = raw
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .take(6)
+        .collect();
+    let random = Uuid::new_v4().simple().to_string();
+    if ascii_prefix.is_empty() {
+        format!("auto_{}", random)
+    } else {
+        format!("auto_{}_{}", ascii_prefix.to_lowercase(), &random[..8])
+    }
+}
+
+fn column_label_to_index(label: &str) -> Option<usize> {
+    let trimmed = label.trim().to_uppercase();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut value: usize = 0;
+    for ch in trimmed.chars() {
+        if !('A'..='Z').contains(&ch) {
+            return None;
+        }
+        let digit = (ch as u8 - b'A' + 1) as usize;
+        value = value * 26 + digit;
+    }
+
+    value.checked_sub(1)
+}
+
 fn parse_workbook(
     term_id: Uuid,
     workbook: &ExcelWorkbook,
+    columns: &EnrollmentImportColumns,
 ) -> (Vec<EnrollmentDraft>, Vec<EnrollmentImportOutcome>) {
     let sheet = workbook.primary_sheet();
     let mut drafts = Vec::new();
-    let mut failures = Vec::new();
+    let failures = Vec::new();
 
     if sheet.rows.len() <= 1 {
         return (drafts, failures);
@@ -308,27 +527,22 @@ fn parse_workbook(
 
     for (row_index, row) in sheet.rows.iter().enumerate().skip(1) {
         let row_number = (row_index + 1) as u32;
-        let identifier = row.get(0).map(|cell| cell.trim()).unwrap_or("");
+        let identifier = row
+            .get(columns.student_identifier_column)
+            .map(|cell| cell.trim())
+            .unwrap_or("");
         if identifier.is_empty() {
             continue;
         }
 
         let (student_code, remainder) = extract_student_code(identifier);
-        let Some((homeroom, student_name)) = split_homeroom_and_name(&remainder) else {
-            failures.push(EnrollmentImportOutcome {
-                source_row: row_number,
-                draft: None,
-                status: EnrollmentImportStatus::Failed,
-                enrollment_id: None,
-                message: Some(format!(
-                    "无法解析“年级班级姓名”列：`{}`。请使用“班级 姓名”格式（空格或 - 分隔）。",
-                    identifier
-                )),
-            });
-            continue;
-        };
+        let (homeroom, student_name) = split_homeroom_and_name(&remainder)
+            .unwrap_or_else(|| (String::new(), remainder.trim().to_string()));
 
-        for &(col_index, weekday) in &WEEKDAY_COLUMNS {
+        for &(weekday, col_index) in &columns.weekday_columns {
+            if col_index >= row.len() {
+                continue;
+            }
             let value = row
                 .get(col_index)
                 .map(|cell| cell.trim())
@@ -345,6 +559,7 @@ fn parse_workbook(
                 requested_weekday: weekday,
                 club_lookup_value: value.to_string(),
                 source_row: row_number,
+                raw_identifier: identifier.to_string(),
             });
         }
     }
@@ -357,7 +572,7 @@ async fn process_single_draft(
     job_id: Uuid,
     draft: EnrollmentDraft,
     student_index: &StudentIndex,
-    club_index: &ClubIndex,
+    club_index: &mut ClubIndex,
     seen_pairs: &mut HashSet<String>,
 ) -> Result<EnrollmentImportOutcome, AppError> {
     let student = match student_index.find(&draft) {
@@ -373,13 +588,12 @@ async fn process_single_draft(
         }
     };
 
-    let club = match club_index.find(&draft.club_lookup_value, student.campus_id) {
-        Some(record) => record,
-        None => {
-            let message = format!(
-                "无法匹配社团 `{}`，请确认名称或编码是否存在于当前学期",
-                draft.club_lookup_value
-            );
+    let club = match club_index
+        .resolve(tx, student.campus_id, &draft.club_lookup_value)
+        .await
+    {
+        Ok(record) => record,
+        Err(AppError::Validation(message)) => {
             return Ok(EnrollmentImportOutcome {
                 source_row: draft.source_row,
                 draft: Some(draft),
@@ -388,6 +602,7 @@ async fn process_single_draft(
                 message: Some(message),
             });
         }
+        Err(other) => return Err(other),
     };
 
     let dedup_key = format!(
@@ -528,6 +743,29 @@ fn split_homeroom_and_name(value: &str) -> Option<(String, String)> {
             }
         }
     }
+
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut ascii_prefix = false;
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_ascii_alphanumeric() {
+            ascii_prefix = true;
+            continue;
+        }
+        if ascii_prefix {
+            let (left, right) = trimmed.split_at(idx);
+            let homeroom = left.trim();
+            let student = right.trim();
+            if !homeroom.is_empty() && !student.is_empty() {
+                return Some((homeroom.to_string(), student.to_string()));
+            }
+        }
+        break;
+    }
+
     None
 }
 

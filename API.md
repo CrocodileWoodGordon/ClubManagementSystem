@@ -22,11 +22,14 @@
 - `POST /api/import/students`  
   上传“校区简称/班级/姓名” Excel（支持 `.xls` 与 `.xlsx`，表头占第一行）。服务优先使用 `campuses.short_name`（兼容 `code`）匹配校区，自动创建/更新 `homerooms` 并写入 `students`；响应包含导入汇总（total/success/skipped/errors）。
 - `POST /api/import/enrollments`  
-  上传问卷星报名 Excel（列1为“年级班级姓名”，列2~6 为周一~周五社团）。返回逐行 `EnrollmentImportOutcome`，并在 `import_jobs` 中记录任务。
+  上传问卷星报名 Excel（默认 E 列为“班级+姓名”，H~L 列为周一~周五社团，可通过 Multipart `config` 字段传入 JSON 自定义列映射）。返回逐行 `EnrollmentImportOutcome`，并在 `import_jobs` 中记录任务，遇到新社团会自动创建 `clubs`/`club_terms`。
 
-## 5. 报名 / 分班占位接口
-- `GET /api/enrollments/pending`：待分班列表（当前返回空数组，占位）。
-- `POST /api/enrollments/status`：批量更新报名状态（当前直接返回 202，占位）。
+## 5. 报名 / 分班接口
+- `GET /api/enrollments/pending`  
+  支持按 `term_id`（默认激活学期）、`campus_id`、`homeroom`、`club`、`weekday`、`student_name` 筛选待分班记录，返回包含学生姓名、班级、校区、社团、星期的详细列表。
+- `GET /api/enrollments/summary`  
+  返回按“校区 + 社团 + 星期”聚合的报名数量，用于横向对比各社团热度；同样支持 `term_id`/`campus_id` 过滤。
+- `POST /api/enrollments/status`：批量更新报名状态（当前仍为占位实现，后续补充真实逻辑）。
 - `GET /api/classes/pending` / `POST /api/classes/assign`：班级分配占位接口，等待真实实现。
 
 ## 6. 考勤与报表占位接口

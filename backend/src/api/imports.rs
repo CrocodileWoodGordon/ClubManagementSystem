@@ -1,8 +1,7 @@
 use axum::{
-    Json, Router,
     extract::{Multipart, State},
-    http::StatusCode,
     routing::post,
+    Json, Router,
 };
 use chrono::Datelike;
 use serde::Serialize;
@@ -12,20 +11,26 @@ use uuid::Uuid;
 use crate::{
     api::ApiState,
     db::DbPool,
+    domain::EnrollmentImportOutcome,
     error::AppError,
     services::{ExcelImportService, StudentImportSummary},
 };
 
+#[derive(Debug, Serialize)]
+struct EnrollmentImportResponse {
+    outcomes: Vec<EnrollmentImportOutcome>,
+}
+
 async fn import_enrollments(
     State(state): State<ApiState>,
     mut multipart: Multipart,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<EnrollmentImportResponse>, AppError> {
     let term = find_active_term(&state.pool).await?;
     let mut service = ExcelImportService::new(&state.pool);
-    service
+    let outcomes = service
         .ingest_enrollments(term.id, "system", &mut multipart)
         .await?;
-    Ok(StatusCode::ACCEPTED)
+    Ok(Json(EnrollmentImportResponse { outcomes }))
 }
 
 #[derive(Debug, Serialize)]

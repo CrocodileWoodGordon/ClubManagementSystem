@@ -14,9 +14,27 @@ export interface ClassInstance {
     location: string;
 }
 
-export interface Enrollment {
-    id: string;
+export type EnrollmentStatus = "PENDING" | "ACTIVE" | "DROPPED" | "TRANSFERRED_OUT" | "TRANSFERRED_IN";
+
+export interface PendingEnrollment {
+    enrollmentId: string;
     studentId: string;
-    classId?: string;
-    status: "PENDING" | "ACTIVE" | "DROPPED" | "TRANSFERRED";
+    studentName: string;
+    studentCode?: string;
+    homeroom: string;
+    campusId: string;
+    campusName: string;
+    clubId: string;
+    clubName: string;
+    requestedWeekday: number;
+    status: EnrollmentStatus;
+}
+
+export interface EnrollmentSummaryRow {
+    campusId: string;
+    campusName: string;
+    clubId: string;
+    clubName: string;
+    requestedWeekday: number;
+    total: number;
 }
