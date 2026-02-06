@@ -60,6 +60,7 @@
 - 2026-02-05：落地多校区能力，新增 `campuses` 表并为 `homerooms`/`club_terms`/`classes`/`enrollments` 添加 `campus_id` 外键；同步更新 `DATABASE.md`、`PROJECT_SPEC.md` 与报名导入服务以按校区匹配社团。
 - 2026-02-05：新增学期/校区管理接口（`/api/admin/terms`、`/api/admin/campuses/*`）以及 `API.md` 文档，后续前端可直接创建学期、维护校区信息。
 - 2026-02-06：修复 Axum 0.8 路由写法（`/api/admin/campuses/{id}`、`/api/attendance/template/{class_id}`），`cargo run` 可正常启动，已用 `curl --noproxy "*"` 验证 `/health`、`/api/enrollments/pending`、`/api/classes/pending`、`/api/reports/settlement` 等占位端点均返回 200。
+- 2026-02-06：新增 `POST /api/admin/campuses`，支持传入 `code/name/...` 创建校区；同一接口返回 `CampusDto`，并保持原有 `PATCH /api/admin/campuses/{id}` 可继续更新名称、联系人等信息。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -67,4 +68,4 @@
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（接口仍为占位，尚未实现筛选逻辑）。
 - `/api/import/students` 接收 `file` 字段的 Excel，A 列校区（匹配 `campuses.code/name`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。
-- `/api/admin/terms` 列出/创建学期；`/api/admin/campuses/{id}` 支持更新校区名称、地址及联系人信息，准备在前端提供直接维护入口。
+- `/api/admin/terms` 列出/创建学期；`/api/admin/campuses` 新增校区；`/api/admin/campuses/{id}` 支持更新校区名称、地址及联系人信息，准备在前端提供直接维护入口。

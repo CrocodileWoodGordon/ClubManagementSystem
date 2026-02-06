@@ -54,6 +54,16 @@ struct UpdateCampusRequest {
     contact_phone: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct CreateCampusRequest {
+    code: String,
+    name: String,
+    short_name: Option<String>,
+    address: Option<String>,
+    contact_name: Option<String>,
+    contact_phone: Option<String>,
+}
+
 impl UpdateCampusRequest {
     fn has_changes(&self) -> bool {
         self.name.is_some()
@@ -136,6 +146,34 @@ async fn list_campuses(State(state): State<ApiState>) -> Result<Json<Vec<CampusD
     Ok(Json(items))
 }
 
+async fn create_campus(
+    State(state): State<ApiState>,
+    Json(payload): Json<CreateCampusRequest>,
+) -> Result<Json<CampusDto>, AppError> {
+    if payload.code.trim().is_empty() || payload.name.trim().is_empty() {
+        return Err(AppError::Validation("请提供校区编号与名称".into()));
+    }
+
+    let row = sqlx::query_as::<_, CampusDto>(
+        r#"
+            INSERT INTO campuses (code, name, short_name, address, contact_name, contact_phone)
+            VALUES ($1,$2,$3,$4,$5,$6)
+            RETURNING id, code, name, short_name, address, contact_name, contact_phone
+        "#,
+    )
+    .bind(payload.code.trim())
+    .bind(payload.name.trim())
+    .bind(payload.short_name.as_deref())
+    .bind(payload.address.as_deref())
+    .bind(payload.contact_name.as_deref())
+    .bind(payload.contact_phone.as_deref())
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    Ok(Json(row))
+}
+
 async fn update_campus(
     Path(campus_id): Path<Uuid>,
     State(state): State<ApiState>,
@@ -177,6 +215,6 @@ async fn update_campus(
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/terms", get(list_terms).post(create_term))
-        .route("/campuses", get(list_campuses))
+        .route("/campuses", get(list_campuses).post(create_campus))
         .route("/campuses/{id}", patch(update_campus))
 }
