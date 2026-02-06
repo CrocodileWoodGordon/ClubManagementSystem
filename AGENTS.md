@@ -67,5 +67,5 @@
 - `frontend/components/forms/BulkAssignmentForm.tsx` 预期调用 `/api/classes/assign` 批量设置班级编号（暂未接线）。
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（接口仍为占位，尚未实现筛选逻辑）。
-- `/api/import/students` 接收 `file` 字段的 Excel，A 列校区（匹配 `campuses.code/name`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。
+- `/api/import/students` 接收 `file` 字段的 Excel，A 列填校区简称（匹配 `campuses.short_name`，也兼容 `code`），B 列班级（显示名），C 列姓名；激活学期 `start_date` 的年份会写入 `homerooms.academic_year`。
 - `/api/admin/terms` 列出/创建学期；`/api/admin/campuses` 新增校区；`/api/admin/campuses/{id}` 支持更新校区名称、地址及联系人信息，准备在前端提供直接维护入口。

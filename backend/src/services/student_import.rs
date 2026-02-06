@@ -141,7 +141,12 @@ async fn process_single_draft(
 
     let campus = campus_index
         .find(&draft.campus_value)
-        .ok_or_else(|| AppError::Validation(format!("无法匹配校区 `{}`", draft.campus_value)))?;
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "无法匹配校区 `{}`，请填写 campuses.short_name 或 code",
+                draft.campus_value
+            ))
+        })?;
 
     let homeroom_id = homerooms
         .get_or_create(tx, campus.id, &draft.class_label)
@@ -236,7 +241,7 @@ impl CampusIndex {
     async fn load(tx: &mut Transaction<'_, Postgres>) -> Result<Self, AppError> {
         let rows = sqlx::query(
             r#"
-                SELECT id, code, name
+                SELECT id, code, name, short_name
                 FROM campuses
             "#,
         )
@@ -255,9 +260,17 @@ impl CampusIndex {
             let name: String = row
                 .try_get("name")
                 .map_err(|err| AppError::Database(err.to_string()))?;
+            let short_name: Option<String> = row
+                .try_get("short_name")
+                .map_err(|err| AppError::Database(err.to_string()))?;
             let record = CampusRecord { id };
             by_key.insert(normalize_key(&code), record.clone());
             by_key.insert(normalize_key(&name), record.clone());
+            if let Some(short) = short_name {
+                if !short.trim().is_empty() {
+                    by_key.insert(normalize_key(&short), record.clone());
+                }
+            }
         }
 
         if by_key.is_empty() {
