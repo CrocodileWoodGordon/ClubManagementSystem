@@ -156,7 +156,7 @@ async fn process_single_draft(
         r#"
             INSERT INTO students (full_name, homeroom_id)
             VALUES ($1,$2)
-            ON CONFLICT ON CONSTRAINT ux_students_active_name DO NOTHING
+            ON CONFLICT DO NOTHING
             RETURNING id
         "#,
     )
