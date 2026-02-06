@@ -144,5 +144,5 @@ pub fn router() -> Router<ApiState> {
         .route("/enrollments", post(import_enrollments))
         .route("/students", post(import_students))
         .route("/placeholders", get(list_placeholders))
-        .route("/placeholders/:import_type", put(update_placeholders))
+        .route("/placeholders/{import_type}", put(update_placeholders))
 }
