@@ -782,6 +782,15 @@ fn choice_is_empty(value: &str) -> bool {
     normalized.is_empty()
         || matches!(
             normalized,
-            "-" | "—" | "——" | "无" | "N/A" | "n/a" | "NA" | "na"
+            "-"
+                | "—"
+                | "——"
+                | "无"
+                | "N/A"
+                | "n/a"
+                | "NA"
+                | "na"
+                | "(空)"
+                | "（空）"
         )
 }
