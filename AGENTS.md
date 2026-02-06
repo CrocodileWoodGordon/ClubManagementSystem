@@ -61,6 +61,8 @@
 - 2026-02-05：新增学期/校区管理接口（`/api/admin/terms`、`/api/admin/campuses/*`）以及 `API.md` 文档，后续前端可直接创建学期、维护校区信息。
 - 2026-02-06：修复 Axum 0.8 路由写法（`/api/admin/campuses/{id}`、`/api/attendance/template/{class_id}`），`cargo run` 可正常启动，已用 `curl --noproxy "*"` 验证 `/health`、`/api/enrollments/pending`、`/api/classes/pending`、`/api/reports/settlement` 等占位端点均返回 200。
 - 2026-02-06：新增 `POST /api/admin/campuses`，支持传入 `code/name/...` 创建校区；同一接口返回 `CampusDto`，并保持原有 `PATCH /api/admin/campuses/{id}` 可继续更新名称、联系人等信息。
+- 2026-02-06：学生 Excel 导入已改为按 `campuses.short_name`（兼容 code）匹配校区，并完善冲突写法避免数据库约束错误。
+- 2026-02-06：Excel 上传兼容 `.xls/.xlsx`，失败时自动回退到临时文件解析，同时新增 `.gitignore` 忽略 `target/` 与 `data2import/`。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
