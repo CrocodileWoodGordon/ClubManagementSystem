@@ -50,5 +50,5 @@ async fn download_template(Path(_class_id): Path<Uuid>) -> StatusCode {
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/bulk", post(bulk_upload))
-        .route("/template/:class_id", post(download_template))
+        .route("/template/{class_id}", post(download_template))
 }

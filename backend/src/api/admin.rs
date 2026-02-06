@@ -178,5 +178,5 @@ pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/terms", get(list_terms).post(create_term))
         .route("/campuses", get(list_campuses))
-        .route("/campuses/:id", patch(update_campus))
+        .route("/campuses/{id}", patch(update_campus))
 }
