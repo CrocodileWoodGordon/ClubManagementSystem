@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use calamine::{Data, Reader, Xlsx, open_workbook_from_rs};
+use calamine::{Data, Reader, open_workbook_auto_from_rs};
 
 use crate::error::AppError;
 
@@ -18,7 +18,7 @@ pub struct ExcelWorkbook {
 impl ExcelWorkbook {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, AppError> {
         let cursor = Cursor::new(bytes);
-        let mut workbook: Xlsx<_> = open_workbook_from_rs(cursor)
+        let mut workbook = open_workbook_auto_from_rs(cursor)
             .map_err(|err| AppError::Parsing(format!("Excel 打开失败: {}", err)))?;
         let sheet_names = workbook.sheet_names().to_owned();
         let mut sheets = Vec::with_capacity(sheet_names.len());

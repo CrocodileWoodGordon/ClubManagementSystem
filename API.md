@@ -20,7 +20,7 @@
 
 ## 4. Excel 导入
 - `POST /api/import/students`  
-  上传“校区简称/班级/姓名” Excel（表头占第一行）。服务优先使用 `campuses.short_name`（兼容 `code`）匹配校区，自动创建/更新 `homerooms` 并写入 `students`；响应包含导入汇总（total/success/skipped/errors）。
+  上传“校区简称/班级/姓名” Excel（支持 `.xls` 与 `.xlsx`，表头占第一行）。服务优先使用 `campuses.short_name`（兼容 `code`）匹配校区，自动创建/更新 `homerooms` 并写入 `students`；响应包含导入汇总（total/success/skipped/errors）。
 - `POST /api/import/enrollments`  
   上传问卷星报名 Excel（列1为“年级班级姓名”，列2~6 为周一~周五社团）。返回逐行 `EnrollmentImportOutcome`，并在 `import_jobs` 中记录任务。
 
