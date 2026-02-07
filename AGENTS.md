@@ -66,6 +66,7 @@
 - 2026-02-06：问卷星报名导入支持列映射（默认 E/H~L），可通过 Multipart `config` JSON 自定义列；若 Excel 中出现新社团，会自动创建 `clubs`/`club_terms` 并按校区/星期存量去重。
 - 2026-02-06：完善报名查询接口，`GET /api/enrollments/pending` 可按学期、校区、班级、社团、星期、学生姓名筛选，并新增 `/api/enrollments/summary` 返回“校区+社团+星期”统计结果供横向对比。
 - 2026-02-06：新增导入占位文本配置（`GET/PUT /api/import/placeholders`），可查询或更新 Excel 中代表空报名的字符串；导入流程会实时读取该配置并跳过占位值。
+- 2026-02-07：封装前端报名 Service，统一 `enrollmentService.ts` 错误处理与字段映射，并新增 Excel 导入调用以返回逐行导入结果，供后续组件直接复用。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
