@@ -69,7 +69,7 @@
 - 2026-02-07：封装前端报名 Service，统一 `enrollmentService.ts` 错误处理与字段映射，并新增 Excel 导入调用以返回逐行导入结果，供后续组件直接复用。
 - 2026-02-07：`/app/(admin)/enrollments` 页面改为实时请求后端的待分班与汇总接口，并新增 `EnrollmentImportPanel` 通过 Excel 上传组件直接调用导入接口，前端可查看逐行导入反馈。
 - 2026-02-07：新增 `GET /api/enrollments/slots` 接口，可按“校区/社团/星期”返回报名学生列表，导入后可直接在前端核对名单，并在前端 `enrollmentService.ts` 中提供对应调用封装。
-- 2026-02-07：报名汇总区新增下拉筛选（校区/社团/星期），`EnrollmentSlotExplorer` 使用 `fetchEnrollmentSlotDetails` 实时展示符合条件的报名名单，方便导入后校验。
+- 2026-02-07：报名汇总区新增下拉筛选（校区/社团/星期），`EnrollmentSlotExplorer` 使用 `fetchEnrollmentSlotDetails` 实时展示符合条件的报名名单，并提供“查询报名名单”按钮失败后可再次触发查询，方便导入后校验。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

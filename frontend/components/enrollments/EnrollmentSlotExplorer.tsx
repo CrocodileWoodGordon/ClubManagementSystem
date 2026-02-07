@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { EnrollmentSummaryRow, PendingEnrollment } from "@/lib/types";
 import { formatEnrollmentStatus, formatWeekday } from "@/lib/utils";
@@ -34,6 +34,18 @@ export function EnrollmentSlotExplorer({ summaryRows }: Props) {
         [summaryRows, selectedCampus, selectedClub],
     );
 
+    const [students, setStudents] = useState<PendingEnrollment[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [hasFetched, setHasFetched] = useState(false);
+    const requestIdRef = useRef(0);
+
+    const resetResult = () => {
+        setHasFetched(false);
+        setStudents([]);
+        setError(null);
+    };
+
     const handleCampusChange = (value: string) => {
         setSelectedCampus(value);
         const nextClubs = dedupeClubs(summaryRows, value);
@@ -41,22 +53,20 @@ export function EnrollmentSlotExplorer({ summaryRows }: Props) {
         setSelectedClub(nextClubId);
         const nextWeekdays = collectWeekdays(summaryRows, value, nextClubId);
         setSelectedWeekday(nextWeekdays[0]?.value ?? "");
+        resetResult();
     };
 
     const handleClubChange = (value: string) => {
         setSelectedClub(value);
         const nextWeekdays = collectWeekdays(summaryRows, selectedCampus, value);
         setSelectedWeekday(nextWeekdays[0]?.value ?? "");
+        resetResult();
     };
 
     const handleWeekdayChange = (value: string) => {
         setSelectedWeekday(value);
+        resetResult();
     };
-
-    const [students, setStudents] = useState<PendingEnrollment[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const requestIdRef = useRef(0);
 
     const loadStudents = useCallback(
         async (campusId: string, clubId: string, weekday: number) => {
@@ -90,12 +100,13 @@ export function EnrollmentSlotExplorer({ summaryRows }: Props) {
 
     const hasSelection = Boolean(selectedCampus && selectedClub && selectedWeekday);
 
-    useEffect(() => {
+    const handleSearch = () => {
         if (!hasSelection) {
             return;
         }
+        setHasFetched(true);
         loadStudents(selectedCampus, selectedClub, Number(selectedWeekday));
-    }, [hasSelection, loadStudents, selectedCampus, selectedClub, selectedWeekday]);
+    };
 
     if (summaryRows.length === 0) {
         return null;
@@ -139,6 +150,23 @@ export function EnrollmentSlotExplorer({ summaryRows }: Props) {
                     placeholder="选择星期"
                 />
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+                <button
+                    type="button"
+                    className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    onClick={handleSearch}
+                    disabled={!hasSelection || loading}
+                >
+                    {loading ? "查询中..." : hasFetched ? "重新查询" : "查询报名名单"}
+                </button>
+                {!hasSelection ? (
+                    <span className="text-sm text-slate-500">请选择校区、社团和星期后再查询。</span>
+                ) : (
+                    <span className="text-sm text-slate-500">
+                        点击按钮将调用 `GET /api/enrollments/slots` 拉取实时名单。
+                    </span>
+                )}
+            </div>
             <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
                 {selectedCampus && selectedClub && selectedWeekday ? (
                     <span>
@@ -154,7 +182,7 @@ export function EnrollmentSlotExplorer({ summaryRows }: Props) {
                 loading={loading}
                 error={error}
                 students={students}
-                hasSelection={hasSelection}
+                ready={hasSelection && hasFetched}
             />
         </div>
     );
@@ -198,15 +226,15 @@ function SlotResult({
     loading,
     error,
     students,
-    hasSelection,
+    ready,
 }: {
     loading: boolean;
     error: string | null;
     students: PendingEnrollment[];
-    hasSelection: boolean;
+    ready: boolean;
 }) {
-    if (!hasSelection) {
-        return <p className="text-sm text-slate-500">请先完成筛选条件。</p>;
+    if (!ready) {
+        return <p className="text-sm text-slate-500">设置条件后点击“查询报名名单”查看结果。</p>;
     }
 
     if (loading) {
@@ -216,7 +244,7 @@ function SlotResult({
     if (error) {
         return (
             <p className="text-sm text-rose-600">
-                加载失败：{error}，请稍后重试。
+                加载失败：{error}，请点击上方“重新查询”按钮重试。
             </p>
         );
     }
