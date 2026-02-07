@@ -139,14 +139,12 @@ async fn process_single_draft(
         return Err(AppError::Validation("姓名列为空，无法导入".into()));
     }
 
-    let campus = campus_index
-        .find(&draft.campus_value)
-        .ok_or_else(|| {
-            AppError::Validation(format!(
-                "无法匹配校区 `{}`，请填写 campuses.short_name 或 code",
-                draft.campus_value
-            ))
-        })?;
+    let campus = campus_index.find(&draft.campus_value).ok_or_else(|| {
+        AppError::Validation(format!(
+            "无法匹配校区 `{}`，请填写 campuses.short_name 或 code",
+            draft.campus_value
+        ))
+    })?;
 
     let homeroom_id = homerooms
         .get_or_create(tx, campus.id, &draft.class_label)

@@ -6,7 +6,18 @@ use sqlx::Row;
 
 use crate::{db::DbPool, error::AppError};
 
-const DEFAULT_ENROLLMENT_PLACEHOLDERS: &[&str] = &["-", "—", "——", "无", "N/A", "n/a", "NA", "na", "(空)", "（空）"];
+const DEFAULT_ENROLLMENT_PLACEHOLDERS: &[&str] = &[
+    "-",
+    "—",
+    "——",
+    "无",
+    "N/A",
+    "n/a",
+    "NA",
+    "na",
+    "(空)",
+    "（空）",
+];
 const DEFAULT_STUDENT_PLACEHOLDERS: &[&str] = &[];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

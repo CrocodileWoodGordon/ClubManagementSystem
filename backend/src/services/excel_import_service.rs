@@ -6,12 +6,8 @@ use crate::{
     domain::EnrollmentImportOutcome,
     error::AppError,
     services::{
-        EnrollmentImportColumns,
-        EnrollmentImportService,
-        ImportPlaceholderService,
-        ImportPlaceholderType,
-        StudentImportService,
-        StudentImportSummary,
+        EnrollmentImportColumns, EnrollmentImportService, ImportPlaceholderService,
+        ImportPlaceholderType, StudentImportService, StudentImportSummary,
     },
     utils::excel::ExcelWorkbook,
 };
@@ -91,9 +87,10 @@ impl<'a> ExcelImportService<'a> {
             .map_err(|err| AppError::Validation(format!("读取上传字段失败: {}", err)))?
         {
             if field.name() == Some("config") {
-                let text = field.text().await.map_err(|err| {
-                    AppError::Validation(format!("读取列配置失败: {}", err))
-                })?;
+                let text = field
+                    .text()
+                    .await
+                    .map_err(|err| AppError::Validation(format!("读取列配置失败: {}", err)))?;
                 if text.trim().is_empty() {
                     continue;
                 }
@@ -102,16 +99,17 @@ impl<'a> ExcelImportService<'a> {
                 continue;
             }
 
-            let is_file_field =
-                field.file_name().is_some() || field.name().map(|name| name == "file").unwrap_or(false);
+            let is_file_field = field.file_name().is_some()
+                || field.name().map(|name| name == "file").unwrap_or(false);
             if is_file_field {
                 let resolved_name = field
                     .file_name()
                     .map(|name| name.to_string())
                     .unwrap_or_else(|| "enrollments.xlsx".into());
-                let bytes = field.bytes().await.map_err(|err| {
-                    AppError::Validation(format!("读取 Excel 内容失败: {}", err))
-                })?;
+                let bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|err| AppError::Validation(format!("读取 Excel 内容失败: {}", err)))?;
                 file_bytes = Some(bytes.to_vec());
                 filename = Some(resolved_name);
             }

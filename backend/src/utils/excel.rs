@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    io::Cursor,
-    path::Path,
-};
+use std::{fs, io::Cursor, path::Path};
 
 use calamine::{Data, Reader, Sheets, open_workbook_auto, open_workbook_auto_from_rs};
 use uuid::Uuid;
@@ -46,8 +42,8 @@ impl ExcelWorkbook {
 
     fn from_temp_file(bytes: &[u8], file_name: Option<&str>) -> Result<Self, AppError> {
         let extension = infer_extension(bytes, file_name);
-        let temp_path = std::env::temp_dir()
-            .join(format!("club_excel_{}.{}", Uuid::new_v4(), extension));
+        let temp_path =
+            std::env::temp_dir().join(format!("club_excel_{}.{}", Uuid::new_v4(), extension));
         fs::write(&temp_path, bytes)
             .map_err(|err| AppError::Parsing(format!("写入临时 Excel 文件失败: {}", err)))?;
 
@@ -120,10 +116,7 @@ fn cell_to_string(cell: &Data) -> String {
 
 fn infer_extension(bytes: &[u8], file_name: Option<&str>) -> String {
     if let Some(name) = file_name {
-        if let Some(ext) = Path::new(name)
-            .extension()
-            .and_then(|ext| ext.to_str())
-        {
+        if let Some(ext) = Path::new(name).extension().and_then(|ext| ext.to_str()) {
             return ext.to_lowercase();
         }
     }

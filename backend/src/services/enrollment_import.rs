@@ -36,9 +36,8 @@ impl Default for EnrollmentImportColumns {
 
 impl EnrollmentImportColumns {
     pub fn from_json(value: &str) -> Result<Self, AppError> {
-        let raw: RawColumnConfig = serde_json::from_str(value).map_err(|err| {
-            AppError::Validation(format!("列配置 JSON 解析失败: {}", err))
-        })?;
+        let raw: RawColumnConfig = serde_json::from_str(value)
+            .map_err(|err| AppError::Validation(format!("列配置 JSON 解析失败: {}", err)))?;
         Self::from_raw(raw)
     }
 

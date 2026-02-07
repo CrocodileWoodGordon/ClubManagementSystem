@@ -1,7 +1,7 @@
 //! API layer that wires together the Axum routers for every bounded context.
 
-mod attendance;
 mod admin;
+mod attendance;
 mod classes;
 mod enrollments;
 mod health;
