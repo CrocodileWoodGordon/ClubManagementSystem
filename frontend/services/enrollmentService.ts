@@ -54,6 +54,13 @@ export interface EnrollmentSummaryParams {
     campusId?: string;
 }
 
+export interface EnrollmentSlotParams {
+    termId?: string;
+    campusId: string;
+    clubId: string;
+    weekday: number;
+}
+
 export async function fetchEnrollmentSummary(
     params?: EnrollmentSummaryParams,
 ): Promise<EnrollmentSummaryRow[]> {
@@ -66,6 +73,29 @@ export async function fetchEnrollmentSummary(
             `/api/enrollments/summary${search}`,
         );
         return response.data.map(mapEnrollmentSummaryRow);
+    });
+}
+
+export async function fetchEnrollmentSlotDetails(
+    params: EnrollmentSlotParams,
+): Promise<PendingEnrollment[]> {
+    if (!params.campusId || !params.clubId || params.weekday === undefined) {
+        throw new EnrollmentServiceError("缺少校区/社团/星期条件，无法查询报名详情");
+    }
+    if (params.weekday < 1 || params.weekday > 7) {
+        throw new EnrollmentServiceError("星期需在 1-7 之间（1 表示周一）");
+    }
+    return safeRequest("获取报名名单失败", async () => {
+        const search = buildQueryString({
+            term_id: params.termId,
+            campus_id: params.campusId,
+            club_id: params.clubId,
+            weekday: String(params.weekday),
+        });
+        const response = await client.get<EnrollmentListResponse>(
+            `/api/enrollments/slots${search}`,
+        );
+        return response.data.map(mapPendingEnrollment);
     });
 }
 

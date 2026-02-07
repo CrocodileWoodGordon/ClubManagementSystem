@@ -1,8 +1,8 @@
 use axum::{
+    Json, Router,
     extract::{Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -12,11 +12,8 @@ use crate::{
     domain::EnrollmentStatus,
     error::AppError,
     services::{
-        EnrollmentFilters,
-        EnrollmentService,
-        EnrollmentSummaryFilters,
-        EnrollmentSummaryRow,
-        PendingEnrollmentDto,
+        EnrollmentFilters, EnrollmentService, EnrollmentSlotFilters, EnrollmentSummaryFilters,
+        EnrollmentSummaryRow, PendingEnrollmentDto,
     },
 };
 
@@ -46,6 +43,14 @@ pub struct EnrollmentListQuery {
 pub struct EnrollmentSummaryQuery {
     pub term_id: Option<Uuid>,
     pub campus_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EnrollmentSlotQuery {
+    pub term_id: Option<Uuid>,
+    pub campus_id: Uuid,
+    pub club_id: Uuid,
+    pub weekday: u8,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,6 +88,26 @@ async fn summarize_enrollments(
     Ok(Json(EnrollmentSummaryResponse { data }))
 }
 
+async fn list_slot_enrollments(
+    State(state): State<ApiState>,
+    Query(query): Query<EnrollmentSlotQuery>,
+) -> Result<Json<EnrollmentListResponse>, AppError> {
+    if query.weekday == 0 || query.weekday > 7 {
+        return Err(AppError::Validation(
+            "weekday 需在 1-7 之间（1=周一，7=周日）".into(),
+        ));
+    }
+    let service = EnrollmentService::new(&state.pool);
+    let filters = EnrollmentSlotFilters {
+        term_id: query.term_id,
+        campus_id: query.campus_id,
+        club_id: query.club_id,
+        weekday: query.weekday,
+    };
+    let data = service.list_slot_details(&filters).await?;
+    Ok(Json(EnrollmentListResponse { data }))
+}
+
 async fn bulk_update_status(
     State(state): State<ApiState>,
     Json(payload): Json<UpdateEnrollmentStatusRequest>,
@@ -99,5 +124,6 @@ pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/pending", get(list_pending_enrollments))
         .route("/summary", get(summarize_enrollments))
+        .route("/slots", get(list_slot_enrollments))
         .route("/status", post(bulk_update_status))
 }

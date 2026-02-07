@@ -13,17 +13,12 @@ pub use billing_service::BillingService;
 pub use class_assignment_service::ClassAssignmentService;
 pub use enrollment_import::{EnrollmentImportColumns, EnrollmentImportService};
 pub use enrollment_service::{
-    EnrollmentFilters,
-    EnrollmentService,
-    EnrollmentSummaryFilters,
-    EnrollmentSummaryRow,
-    PendingEnrollmentDto,
+    EnrollmentFilters, EnrollmentService, EnrollmentSlotFilters, EnrollmentSummaryFilters,
+    EnrollmentSummaryRow, PendingEnrollmentDto,
 };
 pub use excel_import_service::ExcelImportService;
 pub use import_placeholder_service::{
-    ImportPlaceholderConfig,
-    ImportPlaceholderService,
-    ImportPlaceholderType,
+    ImportPlaceholderConfig, ImportPlaceholderService, ImportPlaceholderType,
 };
 pub use reporting_service::ReportingService;
 pub use student_import::{StudentImportService, StudentImportSummary};

@@ -33,6 +33,8 @@
   支持按 `term_id`（默认激活学期）、`campus_id`、`homeroom`、`club`、`weekday`、`student_name` 筛选待分班记录，返回包含学生姓名、班级、校区、社团、星期的详细列表。
 - `GET /api/enrollments/summary`  
   返回按“校区 + 社团 + 星期”聚合的报名数量，用于横向对比各社团热度；同样支持 `term_id`/`campus_id` 过滤。
+- `GET /api/enrollments/slots`  
+  必填 `campus_id`、`club_id`、`weekday`，可选 `term_id`（默认激活学期）。返回指定“校区/社团/星期”下所有报名学生的详情（含 `PENDING` 与 `ACTIVE` 状态），用于 Excel 导入后快速校验名单。
 - `POST /api/enrollments/status`：批量更新报名状态（当前仍为占位实现，后续补充真实逻辑）。
 - `GET /api/classes/pending` / `POST /api/classes/assign`：班级分配占位接口，等待真实实现。
 

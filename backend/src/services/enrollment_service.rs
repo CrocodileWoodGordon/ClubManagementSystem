@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sqlx::{QueryBuilder, Row};
+use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use uuid::Uuid;
 
 use crate::{db::DbPool, domain::EnrollmentStatus, error::AppError};
@@ -23,6 +23,14 @@ pub struct EnrollmentFilters {
 pub struct EnrollmentSummaryFilters {
     pub term_id: Option<Uuid>,
     pub campus_id: Option<Uuid>,
+}
+
+#[derive(Debug)]
+pub struct EnrollmentSlotFilters {
+    pub term_id: Option<Uuid>,
+    pub campus_id: Uuid,
+    pub club_id: Uuid,
+    pub weekday: u8,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,7 +99,10 @@ impl<'a> EnrollmentService<'a> {
                 .push(" AND e.requested_weekday = ")
                 .push_bind(i16::from(weekday));
         }
-        if let Some(homeroom) = filters.homeroom.as_ref().filter(|value| !value.trim().is_empty())
+        if let Some(homeroom) = filters
+            .homeroom
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
         {
             builder
                 .push(" AND h.display_name ILIKE ")
@@ -124,48 +135,53 @@ impl<'a> EnrollmentService<'a> {
             .await
             .map_err(|err| AppError::Database(err.to_string()))?;
 
-        let mut result = Vec::with_capacity(rows.len());
-        for row in rows {
-            let status: String = row
-                .try_get("status")
-                .map_err(|err| AppError::Database(err.to_string()))?;
-            let dto = PendingEnrollmentDto {
-                enrollment_id: row
-                    .try_get("enrollment_id")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                student_id: row
-                    .try_get("student_id")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                student_name: row
-                    .try_get("student_name")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                student_code: row
-                    .try_get("student_code")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                homeroom: row
-                    .try_get("homeroom")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                campus_id: row
-                    .try_get("campus_id")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                campus_name: row
-                    .try_get("campus_name")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                club_id: row
-                    .try_get("club_id")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                club_name: row
-                    .try_get("club_name")
-                    .map_err(|err| AppError::Database(err.to_string()))?,
-                requested_weekday: row
-                    .try_get::<i16, _>("requested_weekday")
-                    .map_err(|err| AppError::Database(err.to_string()))? as u8,
-                status: map_status(&status),
-            };
-            result.push(dto);
-        }
+        rows.into_iter()
+            .map(map_pending_row)
+            .collect::<Result<Vec<_>, _>>()
+    }
 
-        Ok(result)
+    pub async fn list_slot_details(
+        &self,
+        filters: &EnrollmentSlotFilters,
+    ) -> Result<Vec<PendingEnrollmentDto>, AppError> {
+        let term_id = self.resolve_term_id(filters.term_id).await?;
+        let rows = sqlx::query(
+            r#"
+                SELECT e.id AS enrollment_id,
+                       e.student_id,
+                       e.status,
+                       e.requested_weekday,
+                       s.full_name AS student_name,
+                       s.student_code,
+                       h.display_name AS homeroom,
+                       cam.id AS campus_id,
+                       cam.name AS campus_name,
+                       c.id AS club_id,
+                       c.name AS club_name
+                FROM enrollments e
+                INNER JOIN students s ON s.id = e.student_id
+                INNER JOIN homerooms h ON h.id = s.homeroom_id
+                INNER JOIN campuses cam ON cam.id = e.campus_id
+                INNER JOIN clubs c ON c.id = e.club_id
+                WHERE e.term_id = $1
+                  AND e.campus_id = $2
+                  AND e.club_id = $3
+                  AND e.requested_weekday = $4
+                  AND e.status IN ('PENDING','ACTIVE')
+                ORDER BY h.display_name, s.full_name
+            "#,
+        )
+        .bind(term_id)
+        .bind(filters.campus_id)
+        .bind(filters.club_id)
+        .bind(i16::from(filters.weekday))
+        .fetch_all(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        rows.into_iter()
+            .map(map_pending_row)
+            .collect::<Result<Vec<_>, _>>()
     }
 
     pub async fn pending_summary(
@@ -221,7 +237,8 @@ impl<'a> EnrollmentService<'a> {
                     .map_err(|err| AppError::Database(err.to_string()))?,
                 requested_weekday: row
                     .try_get::<i16, _>("requested_weekday")
-                    .map_err(|err| AppError::Database(err.to_string()))? as u8,
+                    .map_err(|err| AppError::Database(err.to_string()))?
+                    as u8,
                 total: row
                     .try_get("total")
                     .map_err(|err| AppError::Database(err.to_string()))?,
@@ -269,4 +286,43 @@ fn map_status(raw: &str) -> EnrollmentStatus {
         "TRANSFERRED_IN" => EnrollmentStatus::TransferredIn,
         _ => EnrollmentStatus::Pending,
     }
+}
+
+fn map_pending_row(row: PgRow) -> Result<PendingEnrollmentDto, AppError> {
+    let status: String = row
+        .try_get("status")
+        .map_err(|err| AppError::Database(err.to_string()))?;
+    Ok(PendingEnrollmentDto {
+        enrollment_id: row
+            .try_get("enrollment_id")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        student_id: row
+            .try_get("student_id")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        student_name: row
+            .try_get("student_name")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        student_code: row
+            .try_get("student_code")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        homeroom: row
+            .try_get("homeroom")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        campus_id: row
+            .try_get("campus_id")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        campus_name: row
+            .try_get("campus_name")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        club_id: row
+            .try_get("club_id")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        club_name: row
+            .try_get("club_name")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        requested_weekday: row
+            .try_get::<i16, _>("requested_weekday")
+            .map_err(|err| AppError::Database(err.to_string()))? as u8,
+        status: map_status(&status),
+    })
 }
