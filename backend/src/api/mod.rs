@@ -8,7 +8,11 @@ mod health;
 mod imports;
 mod reports;
 
-use axum::Router;
+use axum::{
+    Router,
+    http::{HeaderValue, Method},
+};
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::db::DbPool;
 
@@ -18,7 +22,7 @@ pub struct ApiState {
 }
 
 /// Compose every route tree under a single router instance.
-pub fn router(pool: DbPool) -> Router {
+pub fn router(pool: DbPool, frontend_origin: &str) -> Router {
     let state = ApiState { pool };
     Router::<ApiState>::new()
         .merge(health::router())
@@ -29,4 +33,26 @@ pub fn router(pool: DbPool) -> Router {
         .nest("/api/import", imports::router())
         .nest("/api/reports", reports::router())
         .with_state(state)
+        .layer(configure_cors(frontend_origin))
+}
+
+fn configure_cors(origin: &str) -> CorsLayer {
+    if origin.trim() == "*" {
+        return CorsLayer::very_permissive();
+    }
+
+    let value = HeaderValue::from_str(origin)
+        .unwrap_or_else(|_| HeaderValue::from_static("http://localhost:3000"));
+
+    CorsLayer::new()
+        .allow_origin(value)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(Any)
 }

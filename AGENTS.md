@@ -70,6 +70,7 @@
 - 2026-02-07：`/app/(admin)/enrollments` 页面改为实时请求后端的待分班与汇总接口，并新增 `EnrollmentImportPanel` 通过 Excel 上传组件直接调用导入接口，前端可查看逐行导入反馈。
 - 2026-02-07：新增 `GET /api/enrollments/slots` 接口，可按“校区/社团/星期”返回报名学生列表，导入后可直接在前端核对名单，并在前端 `enrollmentService.ts` 中提供对应调用封装。
 - 2026-02-07：报名汇总区新增下拉筛选（校区/社团/星期），`EnrollmentSlotExplorer` 使用 `fetchEnrollmentSlotDetails` 实时展示符合条件的报名名单，并提供“查询报名名单”按钮失败后可再次触发查询，方便导入后校验。
+- 2026-02-07：后端启用 CORS（`FRONTEND_ORIGIN`，默认 `http://localhost:3000`），支持 Next.js 前端直接访问 `http://localhost:8080` 的 API。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
