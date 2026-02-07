@@ -1,19 +1,12 @@
 import { SectionCard } from "@/components/common/SectionCard";
+import { EnrollmentSlotExplorer } from "@/components/enrollments/EnrollmentSlotExplorer";
 import { EnrollmentImportPanel } from "@/components/upload/EnrollmentImportPanel";
 import type { EnrollmentSummaryRow, PendingEnrollment } from "@/lib/types";
-import { formatWeekday } from "@/lib/utils";
+import { formatEnrollmentStatus, formatWeekday } from "@/lib/utils";
 import {
     fetchEnrollmentSummary,
     fetchPendingEnrollments,
 } from "@/services/enrollmentService";
-
-const STATUS_LABELS: Record<string, string> = {
-    PENDING: "待分班",
-    ACTIVE: "已激活",
-    DROPPED: "已退课",
-    TRANSFERRED_OUT: "已转出",
-    TRANSFERRED_IN: "转入待确认",
-};
 
 export default async function EnrollmentPage() {
     const [pendingEnrollments, summaryRows] = await Promise.all([
@@ -31,7 +24,10 @@ export default async function EnrollmentPage() {
                 <EnrollmentImportPanel />
             </SectionCard>
             <SectionCard title="报名汇总" description="按校区 / 社团 / 星期聚合的报名前端视图">
-                <EnrollmentSummaryTable rows={summaryRows} />
+                <div className="space-y-6">
+                    <EnrollmentSummaryTable rows={summaryRows} />
+                    <EnrollmentSlotExplorer summaryRows={summaryRows} />
+                </div>
             </SectionCard>
             <SectionCard title="待处理名单" description="解析成功但仍处于待分班状态的学生">
                 <PendingEnrollmentTable rows={pendingEnrollments} />
@@ -97,15 +93,13 @@ function PendingEnrollmentTable({ rows }: { rows: PendingEnrollment[] }) {
                             <td className="px-4 py-2 text-slate-600">{enrollment.campusName}</td>
                             <td className="px-4 py-2 text-slate-600">{enrollment.clubName}</td>
                             <td className="px-4 py-2 text-slate-600">{formatWeekday(enrollment.requestedWeekday)}</td>
-                            <td className="px-4 py-2 text-slate-600">{formatStatus(enrollment.status)}</td>
+                            <td className="px-4 py-2 text-slate-600">
+                                {formatEnrollmentStatus(enrollment.status)}
+                            </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
         </div>
     );
-}
-
-function formatStatus(status: PendingEnrollment["status"]) {
-    return STATUS_LABELS[status] ?? status;
 }
