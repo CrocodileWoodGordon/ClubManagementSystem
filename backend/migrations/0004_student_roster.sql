@@ -35,6 +35,29 @@ FROM resolved r
 WHERE h.id = r.id;
 
 DO $$
+DECLARE
+    missing_count integer;
 BEGIN
-    IF EXISTS (SELECT 1 FROM homerooms WHERE term_id IS NULL) THEN
-        RAISE EXCEPTION 无法为所有
+    SELECT COUNT(*) INTO missing_count
+    FROM homerooms
+    WHERE term_id IS NULL;
+
+    IF missing_count > 0 THEN
+        RAISE EXCEPTION '无法为所有既有班级推断 term_id，请先创建覆盖这些班级学年的学期（待补齐数量：%）', missing_count;
+    END IF;
+END;
+$$;
+
+ALTER TABLE homerooms
+    ALTER COLUMN term_id SET NOT NULL;
+
+DROP INDEX IF EXISTS ux_homerooms_campus_year_display;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_homerooms_term_campus_display
+    ON homerooms (term_id, campus_id, display_name);
+
+CREATE TRIGGER trg_homerooms_updated_at
+BEFORE UPDATE ON homerooms
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMIT;
