@@ -197,5 +197,5 @@ pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/assign", post(assign_students))
         .route("/", get(list_classes).post(create_class))
-        .route("/:id", put(update_class))
+        .route("/{id}", put(update_class))
 }
