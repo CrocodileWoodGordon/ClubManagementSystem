@@ -15,6 +15,22 @@ export default function SettingsPage() {
                 <p className="text-sm text-slate-600">用于 Excel 解析和排课约束。</p>
             </SectionCard>
             <SectionCard
+                title="学期管理"
+                description="维护学期起止、报名时间并切换当前生效学期。"
+            >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-slate-600">
+                        支持新增/编辑/删除学期，并一键设定当前学期，供报名、名册、分班共用。
+                    </p>
+                    <Link
+                        href="/settings/terms"
+                        className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500"
+                    >
+                        管理学期
+                    </Link>
+                </div>
+            </SectionCard>
+            <SectionCard
                 title="占位文本管理"
                 description="维护 Excel 导入时代表“跳过/空”的字符串，统一作用于报名与学生导入流程。"
             >

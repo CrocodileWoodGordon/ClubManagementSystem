@@ -5,6 +5,17 @@ export interface Student {
     isTeacherChild: boolean;
 }
 
+export interface Term {
+    id: string;
+    code: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    enrollmentStart: string;
+    enrollmentEnd: string;
+    isActive: boolean;
+}
+
 export interface HomeroomRoster {
     id: string;
     termId: string;

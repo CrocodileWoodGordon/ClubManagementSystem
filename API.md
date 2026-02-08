@@ -5,12 +5,18 @@
 ## 1. 健康检查
 - `GET /health`：容器/部署探活，返回 `{ status, service }`。
 
-## 2. 学期管理（新建/查看）
+## 2. 学期管理（增删改/激活）
 - `GET /api/admin/terms`  
   列出所有学期，按 `start_date` 倒序。字段包含 `code`、`name`、`start_date`、`end_date`、`enrollment_start/end`、`is_active`。
 - `POST /api/admin/terms`  
   请求体：`{ code, name, start_date, end_date, enrollment_start, enrollment_end, is_active }`。  
   当 `is_active=true` 时会先将其他学期的 `is_active` 置为 `false`。
+- `PUT /api/admin/terms/{id}`  
+  请求体支持任意字段的局部更新（与 POST 相同字段，全部可选）。当传入 `is_active=true` 时会自动将其他学期标记为非当前。
+- `DELETE /api/admin/terms/{id}`  
+  删除指定学期，若该学期仍为 `is_active=true` 会提示先切换当前学期。
+- `POST /api/admin/terms/{id}/activate`  
+  将目标学期设为当前学期，并把其他学期 `is_active` 置为 `false`；响应返回新的学期详情。
 
 ## 3. 校区管理（查看/修改）
 - `GET /api/admin/campuses`  

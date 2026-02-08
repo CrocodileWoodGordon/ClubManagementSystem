@@ -1,7 +1,8 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
-    routing::{get, patch},
+    http::StatusCode,
+    routing::{delete, get, patch, post, put},
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,29 @@ struct CreateTermRequest {
     enrollment_end: NaiveDate,
     #[serde(default)]
     is_active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateTermRequest {
+    code: Option<String>,
+    name: Option<String>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    enrollment_start: Option<NaiveDate>,
+    enrollment_end: Option<NaiveDate>,
+    is_active: Option<bool>,
+}
+
+impl UpdateTermRequest {
+    fn has_changes(&self) -> bool {
+        self.code.is_some()
+            || self.name.is_some()
+            || self.start_date.is_some()
+            || self.end_date.is_some()
+            || self.enrollment_start.is_some()
+            || self.enrollment_end.is_some()
+            || self.is_active.is_some()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +147,145 @@ async fn create_term(
     .fetch_one(tx.as_mut())
     .await
     .map_err(|err| AppError::Database(err.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    Ok(Json(row))
+}
+
+async fn update_term(
+    Path(term_id): Path<Uuid>,
+    State(state): State<ApiState>,
+    Json(payload): Json<UpdateTermRequest>,
+) -> Result<Json<TermDto>, AppError> {
+    if !payload.has_changes() {
+        return Err(AppError::Validation("请至少提供一个需要更新的字段".into()));
+    }
+    if let Some(code) = payload.code.as_ref() {
+        if code.trim().is_empty() {
+            return Err(AppError::Validation("学期编号不能为空".into()));
+        }
+    }
+    if let Some(name) = payload.name.as_ref() {
+        if name.trim().is_empty() {
+            return Err(AppError::Validation("学期名称不能为空".into()));
+        }
+    }
+
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let row = sqlx::query_as::<_, TermDto>(
+        r#"
+            UPDATE terms
+            SET code = COALESCE($2, code),
+                name = COALESCE($3, name),
+                start_date = COALESCE($4, start_date),
+                end_date = COALESCE($5, end_date),
+                enrollment_start = COALESCE($6, enrollment_start),
+                enrollment_end = COALESCE($7, enrollment_end),
+                is_active = COALESCE($8, is_active)
+            WHERE id = $1
+            RETURNING id, code, name, start_date, end_date, enrollment_start, enrollment_end, is_active
+        "#,
+    )
+    .bind(term_id)
+    .bind(payload.code.as_deref())
+    .bind(payload.name.as_deref())
+    .bind(payload.start_date)
+    .bind(payload.end_date)
+    .bind(payload.enrollment_start)
+    .bind(payload.enrollment_end)
+    .bind(payload.is_active)
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let Some(row) = row else {
+        return Err(AppError::NotFound("未找到对应学期".into()));
+    };
+
+    if matches!(payload.is_active, Some(true)) {
+        sqlx::query("UPDATE terms SET is_active = false WHERE id <> $1 AND is_active = true")
+            .bind(term_id)
+            .execute(tx.as_mut())
+            .await
+            .map_err(|err| AppError::Database(err.to_string()))?;
+    }
+
+    tx.commit()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    Ok(Json(row))
+}
+
+async fn delete_term(
+    Path(term_id): Path<Uuid>,
+    State(state): State<ApiState>,
+) -> Result<StatusCode, AppError> {
+    let is_active = sqlx::query_scalar::<_, bool>("SELECT is_active FROM terms WHERE id = $1")
+        .bind(term_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let Some(is_active) = is_active else {
+        return Err(AppError::NotFound("未找到对应学期".into()));
+    };
+
+    if is_active {
+        return Err(AppError::Validation(
+            "请先切换当前学期后再删除该学期".into(),
+        ));
+    }
+
+    sqlx::query("DELETE FROM terms WHERE id = $1")
+        .bind(term_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn activate_term(
+    Path(term_id): Path<Uuid>,
+    State(state): State<ApiState>,
+) -> Result<Json<TermDto>, AppError> {
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let row = sqlx::query_as::<_, TermDto>(
+        r#"
+            UPDATE terms
+            SET is_active = true
+            WHERE id = $1
+            RETURNING id, code, name, start_date, end_date, enrollment_start, enrollment_end, is_active
+        "#,
+    )
+    .bind(term_id)
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let Some(row) = row else {
+        return Err(AppError::NotFound("未找到对应学期".into()));
+    };
+
+    sqlx::query("UPDATE terms SET is_active = false WHERE id <> $1 AND is_active = true")
+        .bind(term_id)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
 
     tx.commit()
         .await
@@ -215,6 +378,8 @@ async fn update_campus(
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/terms", get(list_terms).post(create_term))
+        .route("/terms/{id}", put(update_term).delete(delete_term))
+        .route("/terms/{id}/activate", post(activate_term))
         .route("/campuses", get(list_campuses).post(create_campus))
         .route("/campuses/{id}", patch(update_campus))
 }

@@ -78,6 +78,7 @@
 - 2026-02-08：待处理名单子页面新增骨架屏 `loading.tsx`，并确立“前端页面加载需即时反馈”规范。
 - 2026-02-08：占位文本配置新增 `(跳过)` 默认值，并在数据库侧清理同名社团；前端 `/settings/placeholders` 提供查看/新增/删除占位文本的管理界面。
 - 2026-02-08：新增学生名册后端 API（`/api/students/*`）及前端工作台。`homerooms` 现绑定 `term_id` 并记录班主任信息，支持复用旧学期班级与学生数据。前端“学生名册”页面可筛选学期/校区、导入 Excel、维护班级元信息并对单个学生增删改。
+- 2026-02-08：系统设置新增“学期管理”板块与 `/settings/terms` 页面，`TermSettingsPanel` 支持学期增删改查与快速切换当前学期；后端 `/api/admin/terms` 新增更新、删除、激活接口并同步 `termService` 封装。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -93,3 +94,4 @@
 - 前端 `ClassAssignmentBoard`（`/app/(admin)/class-assignment`）复用报名汇总的筛选条件，调用 `fetchEnrollmentSummary` + `fetchEnrollmentSlotDetails` + `classAssignmentService`，提供单选/多选分班，并支持创建/编辑班级；`BulkAssignmentForm` 组件接收 `classes` 列表进行批量分配。
 - `/app/(admin)/settings/placeholders` 使用 `importPlaceholderService` 调用 `/api/import/placeholders`，支持管理员在前端增删改占位字符串。
 - `frontend/services/studentRosterService.ts` 调用 `/api/students/homerooms`、`/api/students/{id}` 等接口，提供班级列表、班主任信息更新、学生增删改与学期间复用；`/app/(admin)/students` 页面通过 `StudentRosterDashboard` 组合 Excel 导入与名册工作台。
+- `frontend/services/termService.ts` 对接 `/api/admin/terms` 的创建/更新/删除/激活接口，供 `/app/(admin)/settings/terms` 中的 `TermSettingsPanel` 使用以维护学期与当前学期状态。
