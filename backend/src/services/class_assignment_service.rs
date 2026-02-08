@@ -140,7 +140,8 @@ impl<'a> ClassAssignmentService<'a> {
                 )
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 RETURNING id, term_id, campus_id, club_id, class_code, weekday,
-                          start_time, end_time, location, capacity, status, notes
+                          start_time, end_time, location, capacity, status, notes,
+                          0::bigint AS assigned_count
             "#,
         )
         .bind(term_id)
