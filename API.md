@@ -34,9 +34,14 @@
 - `GET /api/enrollments/summary`  
   返回按“校区 + 社团 + 星期”聚合的报名数量，用于横向对比各社团热度；同样支持 `term_id`/`campus_id` 过滤。
 - `GET /api/enrollments/slots`  
-  必填 `campus_id`、`club_id`、`weekday`，可选 `term_id`（默认激活学期）。返回指定“校区/社团/星期”下所有报名学生的详情（含 `PENDING` 与 `ACTIVE` 状态），用于 Excel 导入后快速校验名单。
+  必填 `campus_id`、`club_id`、`weekday`，可选 `term_id`（默认激活学期）。返回指定“校区/社团/星期”下所有报名学生的详情（含 `PENDING` 与 `ACTIVE` 状态），并附带 `class_id`/`class_code` 字段用于展示当前分班结果。
 - `POST /api/enrollments/status`：批量更新报名状态（当前仍为占位实现，后续补充真实逻辑）。
-- `GET /api/classes/pending` / `POST /api/classes/assign`：班级分配占位接口，等待真实实现。
+- `GET /api/classes`  
+  查询当前学期在指定 `campus_id` + `club_id` + `weekday` 下的班级列表，返回 `class_code`、起止时间、地点、容量及实时 `assigned_count`。
+- `POST /api/classes`  
+  传入 `{ campus_id, club_id, weekday, class_code, start_time, end_time, location?, capacity? }` 新建班级，`start/end_time` 需使用 `HH:MM` 文本。
+- `POST /api/classes/assign`  
+  请求体：`{ campus_id, club_id, weekday, class_id?, enrollment_ids[] }`。若 `class_id` 为 `null` 表示撤销分班，接口会同步更新报名状态为 `PENDING` 并返回 `updated` 数量。
 
 ## 6. 考勤与报表占位接口
 - `POST /api/attendance/bulk`、`POST /api/attendance/template/{class_id}`：考勤上传/模板生成占位。

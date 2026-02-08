@@ -46,6 +46,8 @@ pub struct PendingEnrollmentDto {
     pub club_name: String,
     pub requested_weekday: u8,
     pub status: EnrollmentStatus,
+    pub class_id: Option<Uuid>,
+    pub class_code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,18 +76,21 @@ impl<'a> EnrollmentService<'a> {
                    e.student_id,
                    e.status,
                    e.requested_weekday,
+                   e.class_id,
                    s.full_name AS student_name,
                    s.student_code,
                    h.display_name AS homeroom,
                    cam.id AS campus_id,
                    cam.name AS campus_name,
                    c.id AS club_id,
-                   c.name AS club_name
+                   c.name AS club_name,
+                   cls.class_code
             FROM enrollments e
             INNER JOIN students s ON s.id = e.student_id
             INNER JOIN homerooms h ON h.id = s.homeroom_id
             INNER JOIN campuses cam ON cam.id = e.campus_id
             INNER JOIN clubs c ON c.id = e.club_id
+            LEFT JOIN classes cls ON cls.id = e.class_id
             WHERE e.term_id = "#,
         );
         builder.push_bind(term_id);
@@ -151,18 +156,21 @@ impl<'a> EnrollmentService<'a> {
                        e.student_id,
                        e.status,
                        e.requested_weekday,
+                       e.class_id,
                        s.full_name AS student_name,
                        s.student_code,
                        h.display_name AS homeroom,
                        cam.id AS campus_id,
                        cam.name AS campus_name,
                        c.id AS club_id,
-                       c.name AS club_name
+                       c.name AS club_name,
+                       cls.class_code
                 FROM enrollments e
                 INNER JOIN students s ON s.id = e.student_id
                 INNER JOIN homerooms h ON h.id = s.homeroom_id
                 INNER JOIN campuses cam ON cam.id = e.campus_id
                 INNER JOIN clubs c ON c.id = e.club_id
+                LEFT JOIN classes cls ON cls.id = e.class_id
                 WHERE e.term_id = $1
                   AND e.campus_id = $2
                   AND e.club_id = $3
@@ -324,5 +332,11 @@ fn map_pending_row(row: PgRow) -> Result<PendingEnrollmentDto, AppError> {
             .try_get::<i16, _>("requested_weekday")
             .map_err(|err| AppError::Database(err.to_string()))? as u8,
         status: map_status(&status),
+        class_id: row
+            .try_get("class_id")
+            .map_err(|err| AppError::Database(err.to_string()))?,
+        class_code: row
+            .try_get("class_code")
+            .map_err(|err| AppError::Database(err.to_string()))?,
     })
 }

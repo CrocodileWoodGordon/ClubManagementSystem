@@ -5,13 +5,22 @@ export interface Student {
     isTeacherChild: boolean;
 }
 
+export type ClassStatus = "PLANNED" | "ACTIVE" | "ARCHIVED";
+
 export interface ClassInstance {
-    id?: string;
+    id: string;
+    termId: string;
+    campusId: string;
     clubId: string;
-    dayOfWeek: number;
-    batchNumber: string;
-    timeSlot: string;
-    location: string;
+    classCode: string;
+    weekday: number;
+    startTime: string;
+    endTime: string;
+    location?: string;
+    capacity?: number;
+    status: ClassStatus;
+    notes?: string;
+    assignedCount: number;
 }
 
 export type EnrollmentStatus = "PENDING" | "ACTIVE" | "DROPPED" | "TRANSFERRED_OUT" | "TRANSFERRED_IN";
@@ -28,6 +37,8 @@ export interface PendingEnrollment {
     clubName: string;
     requestedWeekday: number;
     status: EnrollmentStatus;
+    classId?: string;
+    classCode?: string;
 }
 
 export interface EnrollmentSummaryRow {

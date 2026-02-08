@@ -155,6 +155,8 @@ function mapPendingEnrollment(data: PendingEnrollmentApi): PendingEnrollment {
         clubName: data.club_name,
         requestedWeekday: data.requested_weekday,
         status: data.status,
+        classId: toOptional(data.class_id),
+        classCode: toOptional(data.class_code),
     };
 }
 
@@ -244,6 +246,8 @@ interface PendingEnrollmentApi {
     club_name: string;
     requested_weekday: number;
     status: PendingEnrollment["status"];
+    class_id: string | null;
+    class_code: string | null;
 }
 
 interface EnrollmentSummaryResponse {
