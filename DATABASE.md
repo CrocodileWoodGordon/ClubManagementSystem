@@ -176,6 +176,8 @@
 | `updated_by` | text | | |
 | `updated_at` | timestamptz | default now() | |
 
+> 默认占位集合会预置 `-`、`(空)`、`(跳过)` 等字符串，界面层可通过 API 自定义增删。
+
 #### `enrollments`
 | 字段 | 类型 | 约束 | 备注 |
 | --- | --- | --- | --- |

@@ -17,6 +17,7 @@ const DEFAULT_ENROLLMENT_PLACEHOLDERS: &[&str] = &[
     "na",
     "(空)",
     "（空）",
+    "(跳过)",
 ];
 const DEFAULT_STUDENT_PLACEHOLDERS: &[&str] = &[];
 

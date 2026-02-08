@@ -26,7 +26,7 @@
 - `GET /api/import/placeholders`  
   查询各导入类型的占位文本（默认包含 `ENROLLMENTS`）。可用 `?import_type=ENROLLMENTS` 单独获取某一类型。
 - `PUT /api/import/placeholders/{import_type}`  
-  传入 `{ "placeholders": ["-", "(空)"] }` 全量替换指定类型的占位文本，更新后导入逻辑立即生效。
+  传入 `{ "placeholders": ["-", "(空)", "(跳过)"] }` 全量替换指定类型的占位文本，更新后导入逻辑立即生效。
 
 ## 5. 报名 / 分班接口
 - `GET /api/enrollments/pending`  

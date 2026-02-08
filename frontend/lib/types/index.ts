@@ -77,3 +77,12 @@ export interface EnrollmentImportOutcome {
     enrollmentId?: string;
     message?: string;
 }
+
+export type ImportPlaceholderType = "ENROLLMENTS" | "STUDENTS";
+
+export interface ImportPlaceholderConfig {
+    importType: ImportPlaceholderType;
+    placeholders: string[];
+    updatedBy?: string;
+    updatedAt: string;
+}
