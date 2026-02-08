@@ -7,7 +7,6 @@ const ENROLLMENT_TABS = [
     { href: "/enrollments/summary", label: "报名汇总" },
     { href: "/enrollments/slots", label: "筛选报名名单" },
     { href: "/enrollments/pending", label: "待处理名单" },
-    { href: "/enrollments/placeholders", label: "占位文本设置" },
 ];
 
 export default function EnrollmentLayout({ children }: { children: ReactNode }) {

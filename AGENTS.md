@@ -76,7 +76,7 @@
 - 2026-02-08：补充 `PUT /api/classes/{id}`，允许更新既有班级的编号/时间/地点/容量；前端 `ClassAssignmentBoard` 支持“编辑班级”流程，可在列表内一键进入编辑模式并提交至新接口。
 - 2026-02-08：报名管理页面改为二级导航结构，导入/汇总/筛选报名名单/待处理名单拆分为独立子页面，初次进入仅加载导入面板，避免一次性获取所有报名数据。
 - 2026-02-08：待处理名单子页面新增骨架屏 `loading.tsx`，并确立“前端页面加载需即时反馈”规范。
-- 2026-02-08：占位文本配置新增 `(跳过)` 默认值，并在数据库侧清理同名社团；前端 `/enrollments/placeholders` 提供查看/新增/删除占位文本的管理界面。
+- 2026-02-08：占位文本配置新增 `(跳过)` 默认值，并在数据库侧清理同名社团；前端 `/settings/placeholders` 提供查看/新增/删除占位文本的管理界面。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -90,4 +90,4 @@
 - `/app/(admin)/enrollments/page.tsx` 通过 `EnrollmentSlotExplorer` 组件下发汇总数据并触发 `fetchEnrollmentSlotDetails`，在前端直接渲染筛选结果名单。
 - `/api/classes` 提供按学期/校区/社团/星期查询及新建班级能力，返回 `assigned_count`；`POST /api/classes/assign` 用于批量写入 `enrollments.class_id`，并在 `class_id = null` 时恢复 `PENDING` 状态。
 - 前端 `ClassAssignmentBoard`（`/app/(admin)/class-assignment`）复用报名汇总的筛选条件，调用 `fetchEnrollmentSummary` + `fetchEnrollmentSlotDetails` + `classAssignmentService`，提供单选/多选分班，并支持创建/编辑班级；`BulkAssignmentForm` 组件接收 `classes` 列表进行批量分配。
-- `/app/(admin)/enrollments/placeholders` 使用 `importPlaceholderService` 调用 `/api/import/placeholders`，支持管理员在前端增删改占位字符串。
+- `/app/(admin)/settings/placeholders` 使用 `importPlaceholderService` 调用 `/api/import/placeholders`，支持管理员在前端增删改占位字符串。
