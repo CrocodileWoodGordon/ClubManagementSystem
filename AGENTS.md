@@ -73,6 +73,7 @@
 - 2026-02-07：后端启用 CORS（`FRONTEND_ORIGIN`，默认 `http://localhost:3000`），支持 Next.js 前端直接访问 `http://localhost:8080` 的 API。
 - 2026-02-08：实现班级分配闭环：后端新增 `GET/POST /api/classes` 与 `POST /api/classes/assign`，支持按校区+社团+星期查询/创建具体班级并批量更新 `enrollments.class_id`；`/api/enrollments/slots` 响应补充 `class_id/class_code` 方便前端展示当前分班状态；前端新增“班级分配”页面，复用报名 slots 过滤，内置班级列表+新建表单、学生分班下拉与多选批量操作。
 - 2026-02-08：补充 `PUT /api/classes/{id}`，允许更新既有班级的编号/时间/地点/容量；前端 `ClassAssignmentBoard` 支持“编辑班级”流程，可在列表内一键进入编辑模式并提交至新接口。
+- 2026-02-08：报名管理页面改为二级导航结构，导入/汇总/筛选报名名单/待处理名单拆分为独立子页面，初次进入仅加载导入面板，避免一次性获取所有报名数据。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
