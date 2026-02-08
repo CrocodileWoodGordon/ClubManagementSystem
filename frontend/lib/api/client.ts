@@ -28,4 +28,16 @@ export class ApiClient {
         }
         return res.json();
     }
+
+    async put<T>(path: string, body: unknown): Promise<T> {
+        const res = await fetch(`${this.baseUrl}${path}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            throw new Error(`PUT ${path} failed`);
+        }
+        return res.json();
+    }
 }

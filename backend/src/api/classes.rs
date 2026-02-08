@@ -2,8 +2,8 @@ use std::fmt::Write;
 
 use axum::{
     Json, Router,
-    extract::{Query, State},
-    routing::{get, post},
+    extract::{Path, Query, State},
+    routing::{get, post, put},
 };
 use chrono::{NaiveTime, Timelike};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use crate::{
     error::AppError,
     services::class_assignment_service::{
         ClassAssignmentInput, ClassAssignmentService, ClassLookupFilters, ClassSummary,
-        CreateClassInput,
+        CreateClassInput, UpdateClassInput,
     },
 };
 
@@ -138,6 +138,29 @@ async fn assign_students(
     Ok(Json(AssignmentResponse { updated }))
 }
 
+async fn update_class(
+    State(state): State<ApiState>,
+    Path(class_id): Path<Uuid>,
+    Json(payload): Json<CreateClassRequest>,
+) -> Result<Json<ClassDetailResponse>, AppError> {
+    let service = ClassAssignmentService::new(&state.pool);
+    let input = UpdateClassInput {
+        class_id,
+        term_id: payload.term_id,
+        campus_id: payload.campus_id,
+        club_id: payload.club_id,
+        weekday: payload.weekday,
+        class_code: payload.class_code,
+        start_time: parse_time("start_time", &payload.start_time)?,
+        end_time: parse_time("end_time", &payload.end_time)?,
+        location: payload.location,
+        capacity: payload.capacity,
+        notes: payload.notes,
+    };
+    let class = service.update_class(&input).await?;
+    Ok(Json(ClassDetailResponse { data: class.into() }))
+}
+
 impl From<ClassSummary> for ClassDto {
     fn from(summary: ClassSummary) -> Self {
         ClassDto {
@@ -174,4 +197,5 @@ pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/assign", post(assign_students))
         .route("/", get(list_classes).post(create_class))
+        .route("/:id", put(update_class))
 }

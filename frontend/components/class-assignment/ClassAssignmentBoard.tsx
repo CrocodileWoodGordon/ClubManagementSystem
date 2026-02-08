@@ -17,6 +17,7 @@ import {
     assignStudentsToClass,
     createClass,
     fetchClassesForSlot,
+    updateClass,
 } from "@/services/classAssignmentService";
 
 interface Option {
@@ -43,15 +44,17 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [singleUpdatingId, setSingleUpdatingId] = useState<string | null>(null);
     const [bulkUpdating, setBulkUpdating] = useState(false);
-    const [creatingClass, setCreatingClass] = useState(false);
+    const [savingClass, setSavingClass] = useState(false);
     const [classFormError, setClassFormError] = useState<string | null>(null);
-    const [classForm, setClassForm] = useState({
+    const [editingClassId, setEditingClassId] = useState<string | null>(null);
+    const createEmptyClassForm = () => ({
         classCode: "",
         startTime: "16:00",
         endTime: "17:30",
         location: "",
         capacity: "",
     });
+    const [classForm, setClassForm] = useState(createEmptyClassForm);
 
     const campusOptions = useMemo(() => dedupeCampuses(summaryRows), [summaryRows]);
     const clubOptions = useMemo(
@@ -64,13 +67,19 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
     );
 
     const hasSelection = Boolean(selectedCampus && selectedClub && selectedWeekday);
-    const selectedWeekdayNumber = Number(selectedWeekday);
+    const selectedWeekdayNumber = selectedWeekday ? Number(selectedWeekday) : 0;
     const selectedSummary = summaryRows.find(
         (row) =>
             row.campusId === selectedCampus &&
             row.clubId === selectedClub &&
             String(row.requestedWeekday) === selectedWeekday,
     );
+
+    const resetClassForm = () => {
+        setClassForm(createEmptyClassForm());
+        setEditingClassId(null);
+        setClassFormError(null);
+    };
 
     const resetWorkspace = () => {
         setStudents([]);
@@ -79,6 +88,7 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
         setMultiSelectMode(false);
         setHasFetched(false);
         setError(null);
+        resetClassForm();
     };
 
     const handleCampusChange = (value: string) => {
@@ -140,6 +150,22 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleEditClass = (cls: ClassInstance) => {
+        setClassForm({
+            classCode: cls.classCode,
+            startTime: cls.startTime,
+            endTime: cls.endTime,
+            location: cls.location ?? "",
+            capacity: cls.capacity ? String(cls.capacity) : "",
+        });
+        setEditingClassId(cls.id);
+        setClassFormError(null);
+    };
+
+    const handleCancelEdit = () => {
+        resetClassForm();
     };
 
     const toggleSelection = (id: string) => {
@@ -258,29 +284,27 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
         }
     };
 
-    const handleCreateClass = async (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmitClassForm = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!hasSelection) {
-            setClassFormError("请先选择校区 / 社团 / 星期后再新建班级");
+            setClassFormError("请先选择校区 / 社团 / 星期后再维护班级");
             return;
         }
         if (!classForm.classCode.trim()) {
             setClassFormError("班级名称不能为空");
             return;
         }
-        setCreatingClass(true);
+        const capacityNumber =
+            classForm.capacity.trim().length > 0 ? Number(classForm.capacity.trim()) : undefined;
+        if (capacityNumber !== undefined && Number.isNaN(capacityNumber)) {
+            setClassFormError("班级容量需为数字");
+            return;
+        }
+
+        setSavingClass(true);
         setClassFormError(null);
         try {
-            const capacityNumber =
-                classForm.capacity.trim().length > 0
-                    ? Number(classForm.capacity.trim())
-                    : undefined;
-            if (capacityNumber !== undefined && Number.isNaN(capacityNumber)) {
-                setClassFormError("班级容量需为数字");
-                setCreatingClass(false);
-                return;
-            }
-            const created = await createClass({
+            const payload = {
                 campusId: selectedCampus,
                 clubId: selectedClub,
                 weekday: selectedWeekdayNumber,
@@ -289,20 +313,25 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
                 endTime: classForm.endTime,
                 location: classForm.location.trim() || undefined,
                 capacity: capacityNumber,
-            });
-            setClasses((current) => sortClasses([...current, created]));
-            setClassForm({
-                classCode: "",
-                startTime: classForm.startTime,
-                endTime: classForm.endTime,
-                location: "",
-                capacity: "",
-            });
+            };
+            if (editingClassId) {
+                const updated = await updateClass({
+                    ...payload,
+                    id: editingClassId,
+                });
+                setClasses((current) =>
+                    sortClasses(current.map((cls) => (cls.id === updated.id ? updated : cls))),
+                );
+            } else {
+                const created = await createClass(payload);
+                setClasses((current) => sortClasses([...current, created]));
+            }
+            resetClassForm();
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setClassFormError(message);
         } finally {
-            setCreatingClass(false);
+            setSavingClass(false);
         }
     };
 
@@ -369,9 +398,12 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
                         classes={classes}
                         classForm={classForm}
                         classFormError={classFormError}
-                        disabled={creatingClass}
+                        editingClassId={editingClassId}
+                        saving={savingClass}
                         onFormChange={setClassForm}
-                        onSubmit={handleCreateClass}
+                        onSubmit={handleSubmitClassForm}
+                        onEditClass={handleEditClass}
+                        onCancelEdit={handleCancelEdit}
                     />
                     <StudentAssignmentTable
                         students={students}
@@ -439,9 +471,12 @@ function ClassListPanel({
     classes,
     classForm,
     classFormError,
-    disabled,
+    editingClassId,
+    saving,
     onFormChange,
     onSubmit,
+    onEditClass,
+    onCancelEdit,
 }: {
     classes: ClassInstance[];
     classForm: {
@@ -452,7 +487,8 @@ function ClassListPanel({
         capacity: string;
     };
     classFormError: string | null;
-    disabled: boolean;
+    editingClassId: string | null;
+    saving: boolean;
     onFormChange: Dispatch<
         SetStateAction<{
             classCode: string;
@@ -463,19 +499,30 @@ function ClassListPanel({
         }>
     >;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+    onEditClass: (cls: ClassInstance) => void;
+    onCancelEdit: () => void;
 }) {
+    const isEditing = Boolean(editingClassId);
     return (
         <div className="space-y-3 rounded-xl border border-dashed border-slate-200 p-4">
             <div className="flex flex-col gap-1">
                 <h4 className="text-base font-semibold text-slate-900">班级配置</h4>
-                <p className="text-xs text-slate-500">维护上课时间、地点并实时查看已分配人数。</p>
+                <p className="text-xs text-slate-500">
+                    维护上课时间、地点并实时查看已分配人数。
+                    {isEditing ? " 当前处于编辑模式，修改完成后请保存或取消。" : ""}
+                </p>
             </div>
             {classes.length === 0 ? (
                 <p className="text-sm text-slate-500">当前社团暂无班级，请先创建。</p>
             ) : (
                 <div className="grid gap-3 md:grid-cols-2">
                     {classes.map((cls) => (
-                        <div key={cls.id} className="rounded-lg border border-slate-100 p-3 shadow-sm">
+                        <div
+                            key={cls.id}
+                            className={`rounded-lg border p-3 shadow-sm ${
+                                editingClassId === cls.id ? "border-indigo-200 bg-indigo-50/40" : "border-slate-100"
+                            }`}
+                        >
                             <div className="flex items-center justify-between">
                                 <p className="text-sm font-semibold text-slate-900">{cls.classCode}</p>
                                 <span className="text-xs text-slate-500">
@@ -486,12 +533,19 @@ function ClassListPanel({
                             <p className="text-sm text-slate-600">
                                 {cls.startTime} - {cls.endTime} · {cls.location ?? "地点待定"}
                             </p>
+                            <button
+                                type="button"
+                                onClick={() => onEditClass(cls)}
+                                className="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                            >
+                                {editingClassId === cls.id ? "编辑中..." : "编辑"}
+                            </button>
                         </div>
                     ))}
                 </div>
             )}
             <form className="space-y-3 rounded-lg bg-slate-50 p-3" onSubmit={onSubmit}>
-                <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
                     <label className="text-sm text-slate-600">
                         班级名称
                         <input
@@ -552,16 +606,25 @@ function ClassListPanel({
                         />
                     </label>
                 </div>
-                {classFormError ? (
-                    <p className="text-sm text-rose-600">{classFormError}</p>
-                ) : null}
-                <button
-                    type="submit"
-                    disabled={disabled}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                >
-                    {disabled ? "创建中..." : "新建班级"}
-                </button>
+                {classFormError ? <p className="text-sm text-rose-600">{classFormError}</p> : null}
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        type="submit"
+                        disabled={saving}
+                        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                        {saving ? "保存中..." : isEditing ? "保存班级" : "新建班级"}
+                    </button>
+                    {isEditing && (
+                        <button
+                            type="button"
+                            onClick={onCancelEdit}
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white"
+                        >
+                            取消编辑
+                        </button>
+                    )}
+                </div>
             </form>
         </div>
     );

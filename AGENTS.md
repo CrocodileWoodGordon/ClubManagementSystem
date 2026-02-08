@@ -72,6 +72,7 @@
 - 2026-02-07：报名汇总区新增下拉筛选（校区/社团/星期），`EnrollmentSlotExplorer` 使用 `fetchEnrollmentSlotDetails` 实时展示符合条件的报名名单，并提供“查询报名名单”按钮失败后可再次触发查询，方便导入后校验。
 - 2026-02-07：后端启用 CORS（`FRONTEND_ORIGIN`，默认 `http://localhost:3000`），支持 Next.js 前端直接访问 `http://localhost:8080` 的 API。
 - 2026-02-08：实现班级分配闭环：后端新增 `GET/POST /api/classes` 与 `POST /api/classes/assign`，支持按校区+社团+星期查询/创建具体班级并批量更新 `enrollments.class_id`；`/api/enrollments/slots` 响应补充 `class_id/class_code` 方便前端展示当前分班状态；前端新增“班级分配”页面，复用报名 slots 过滤，内置班级列表+新建表单、学生分班下拉与多选批量操作。
+- 2026-02-08：补充 `PUT /api/classes/{id}`，允许更新既有班级的编号/时间/地点/容量；前端 `ClassAssignmentBoard` 支持“编辑班级”流程，可在列表内一键进入编辑模式并提交至新接口。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -84,4 +85,4 @@
 - `frontend/services/enrollmentService.ts` 暴露 `fetchEnrollmentSlotDetails`，调用 `GET /api/enrollments/slots` 根据三元组拉取报名学生列表供导入后核对。
 - `/app/(admin)/enrollments/page.tsx` 通过 `EnrollmentSlotExplorer` 组件下发汇总数据并触发 `fetchEnrollmentSlotDetails`，在前端直接渲染筛选结果名单。
 - `/api/classes` 提供按学期/校区/社团/星期查询及新建班级能力，返回 `assigned_count`；`POST /api/classes/assign` 用于批量写入 `enrollments.class_id`，并在 `class_id = null` 时恢复 `PENDING` 状态。
-- 前端 `ClassAssignmentBoard`（`/app/(admin)/class-assignment`）复用报名汇总的筛选条件，调用 `fetchEnrollmentSummary` + `fetchEnrollmentSlotDetails` + `classAssignmentService`，提供单选/多选分班与班级创建；`BulkAssignmentForm` 组件接收 `classes` 列表进行批量分配。
+- 前端 `ClassAssignmentBoard`（`/app/(admin)/class-assignment`）复用报名汇总的筛选条件，调用 `fetchEnrollmentSummary` + `fetchEnrollmentSlotDetails` + `classAssignmentService`，提供单选/多选分班，并支持创建/编辑班级；`BulkAssignmentForm` 组件接收 `classes` 列表进行批量分配。

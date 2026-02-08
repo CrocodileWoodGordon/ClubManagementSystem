@@ -32,6 +32,21 @@ pub struct CreateClassInput {
 }
 
 #[derive(Debug)]
+pub struct UpdateClassInput {
+    pub class_id: Uuid,
+    pub term_id: Option<Uuid>,
+    pub campus_id: Uuid,
+    pub club_id: Uuid,
+    pub weekday: u8,
+    pub class_code: String,
+    pub start_time: NaiveTime,
+    pub end_time: NaiveTime,
+    pub location: Option<String>,
+    pub capacity: Option<i32>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug)]
 pub struct ClassAssignmentInput {
     pub term_id: Option<Uuid>,
     pub campus_id: Uuid,
@@ -141,7 +156,12 @@ impl<'a> ClassAssignmentService<'a> {
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 RETURNING id, term_id, campus_id, club_id, class_code, weekday,
                           start_time, end_time, location, capacity, status, notes,
-                          0::bigint AS assigned_count
+                          (
+                            SELECT COUNT(*)::bigint
+                            FROM enrollments e
+                            WHERE e.class_id = classes.id
+                              AND e.status IN ('PENDING','ACTIVE')
+                          ) AS assigned_count
             "#,
         )
         .bind(term_id)
@@ -165,9 +185,80 @@ impl<'a> ClassAssignmentService<'a> {
             AppError::Database(err.to_string())
         })?;
 
-        let mut summary = map_class_summary(row)?;
-        summary.assigned_count = 0;
-        Ok(summary)
+        map_class_summary(row)
+    }
+
+    pub async fn update_class(&self, input: &UpdateClassInput) -> Result<ClassSummary, AppError> {
+        validate_weekday(input.weekday)?;
+        if input.class_code.trim().is_empty() {
+            return Err(AppError::Validation("班级名称不能为空".into()));
+        }
+        if input.start_time >= input.end_time {
+            return Err(AppError::Validation("开始时间需早于结束时间".into()));
+        }
+        if let Some(capacity) = input.capacity {
+            if capacity <= 0 {
+                return Err(AppError::Validation("班级容量必须为正数".into()));
+            }
+        }
+
+        let term_id = self.resolve_term_id(input.term_id).await?;
+        self.ensure_class_membership(
+            input.class_id,
+            term_id,
+            input.campus_id,
+            input.club_id,
+            input.weekday,
+        )
+        .await?;
+
+        let row = sqlx::query(
+            r#"
+                UPDATE classes
+                SET class_code = $6,
+                    start_time = $7,
+                    end_time = $8,
+                    location = $9,
+                    capacity = $10,
+                    notes = $11
+                WHERE id = $1
+                  AND term_id = $2
+                  AND campus_id = $3
+                  AND club_id = $4
+                  AND weekday = $5
+                RETURNING id, term_id, campus_id, club_id, class_code, weekday,
+                          start_time, end_time, location, capacity, status, notes,
+                          (
+                            SELECT COUNT(*)::bigint
+                            FROM enrollments e
+                            WHERE e.class_id = classes.id
+                              AND e.status IN ('PENDING','ACTIVE')
+                          ) AS assigned_count
+            "#,
+        )
+        .bind(input.class_id)
+        .bind(term_id)
+        .bind(input.campus_id)
+        .bind(input.club_id)
+        .bind(i16::from(input.weekday))
+        .bind(input.class_code.trim())
+        .bind(input.start_time)
+        .bind(input.end_time)
+        .bind(input.location.as_ref())
+        .bind(input.capacity)
+        .bind(input.notes.as_ref())
+        .fetch_one(self.pool)
+        .await
+        .map_err(|err| {
+            if let sqlx::Error::Database(db_err) = &err {
+                if db_err.code().as_deref() == Some("23505") {
+                    return AppError::Conflict("班级编号已存在，请修改后重试".into());
+                }
+            }
+            AppError::Database(err.to_string())
+        })?;
+
+        map_class_summary(row)
     }
 
     pub async fn assign_enrollments(&self, input: &ClassAssignmentInput) -> Result<u64, AppError> {

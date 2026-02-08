@@ -39,6 +39,10 @@ export interface AssignStudentsPayload {
     enrollmentIds: string[];
 }
 
+export interface UpdateClassPayload extends CreateClassPayload {
+    id: string;
+}
+
 export async function fetchClassesForSlot(
     params: ClassQueryParams,
 ): Promise<ClassInstance[]> {
@@ -86,6 +90,24 @@ export async function assignStudentsToClass(payload: AssignStudentsPayload): Pro
             enrollment_ids: payload.enrollmentIds,
         });
         return res.updated;
+    });
+}
+
+export async function updateClass(payload: UpdateClassPayload): Promise<ClassInstance> {
+    return safeRequest("更新班级失败", async () => {
+        const res = await client.put<ClassDetailResponse>(`/api/classes/${payload.id}`, {
+            term_id: payload.termId,
+            campus_id: payload.campusId,
+            club_id: payload.clubId,
+            weekday: payload.weekday,
+            class_code: payload.classCode,
+            start_time: payload.startTime,
+            end_time: payload.endTime,
+            location: payload.location,
+            capacity: payload.capacity,
+            notes: payload.notes,
+        });
+        return mapClassInstance(res.data);
     });
 }
 

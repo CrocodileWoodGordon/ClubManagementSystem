@@ -40,6 +40,8 @@
   查询当前学期在指定 `campus_id` + `club_id` + `weekday` 下的班级列表，返回 `class_code`、起止时间、地点、容量及实时 `assigned_count`。
 - `POST /api/classes`  
   传入 `{ campus_id, club_id, weekday, class_code, start_time, end_time, location?, capacity? }` 新建班级，`start/end_time` 需使用 `HH:MM` 文本。
+- `PUT /api/classes/{id}`  
+  与 POST 相同字段，用于更新既有班级（仅允许在当前筛选组合内编辑），响应返回最新 `assigned_count`。
 - `POST /api/classes/assign`  
   请求体：`{ campus_id, club_id, weekday, class_id?, enrollment_ids[] }`。若 `class_id` 为 `null` 表示撤销分班，接口会同步更新报名状态为 `PENDING` 并返回 `updated` 数量。
 
