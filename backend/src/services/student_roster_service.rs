@@ -597,7 +597,7 @@ impl<'a> StudentRosterService<'a> {
     ) -> Result<(), AppError> {
         let exists: Option<i64> = sqlx::query_scalar(
             r#"
-                SELECT 1
+                SELECT 1::bigint
                 FROM homerooms
                 WHERE id = $1 AND term_id = $2
             "#,
