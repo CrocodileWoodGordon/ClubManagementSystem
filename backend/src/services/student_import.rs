@@ -70,7 +70,7 @@ impl StudentImportService {
             .map_err(|err| AppError::Database(err.to_string()))?;
 
         let campus_index = CampusIndex::load(&mut tx).await?;
-        let mut homerooms = HomeroomCache::new(academic_year);
+        let mut homerooms = HomeroomCache::new(term_id, academic_year);
         let mut summary = StudentImportSummary {
             job_id,
             total_rows: drafts.len() as i32,
@@ -286,13 +286,15 @@ impl CampusIndex {
 }
 
 struct HomeroomCache {
+    term_id: Uuid,
     academic_year: i16,
     cache: HashMap<String, Uuid>,
 }
 
 impl HomeroomCache {
-    fn new(academic_year: i16) -> Self {
+    fn new(term_id: Uuid, academic_year: i16) -> Self {
         Self {
+            term_id,
             academic_year,
             cache: HashMap::new(),
         }
@@ -304,7 +306,13 @@ impl HomeroomCache {
         campus_id: Uuid,
         raw: &str,
     ) -> Result<Uuid, AppError> {
-        let key = format!("{}::{}::{}", campus_id, self.academic_year, raw.trim());
+        let key = format!(
+            "{}::{}::{}::{}",
+            self.term_id,
+            campus_id,
+            self.academic_year,
+            raw.trim()
+        );
         if let Some(id) = self.cache.get(&key) {
             return Ok(*id);
         }
@@ -312,14 +320,15 @@ impl HomeroomCache {
         let meta = derive_homeroom_meta(raw);
         let row = sqlx::query(
             r#"
-                INSERT INTO homerooms (campus_id, academic_year, grade_label, class_label, display_name)
-                VALUES ($1,$2,$3,$4,$5)
-                ON CONFLICT (campus_id, academic_year, display_name)
+                INSERT INTO homerooms (term_id, campus_id, academic_year, grade_label, class_label, display_name)
+                VALUES ($1,$2,$3,$4,$5,$6)
+                ON CONFLICT (term_id, campus_id, display_name)
                 DO UPDATE SET grade_label = EXCLUDED.grade_label,
                               class_label = EXCLUDED.class_label
                 RETURNING id
             "#,
         )
+        .bind(self.term_id)
         .bind(campus_id)
         .bind(self.academic_year)
         .bind(meta.grade_label)

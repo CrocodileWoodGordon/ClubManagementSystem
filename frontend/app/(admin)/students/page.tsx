@@ -1,18 +1,47 @@
-import { SectionCard } from "@/components/common/SectionCard";
-import { StudentTable } from "@/components/tables/StudentTable";
+import { StudentRosterDashboard } from "@/components/students/StudentRosterDashboard";
+import type {
+    CampusOption,
+    TermOption,
+} from "@/components/students/StudentRosterWorkspace";
+import { ApiClient } from "@/lib/api/client";
 
-const MOCK_STUDENTS = [
-    { id: "1", name: "张三", originalClass: "三年一班", status: "机器人 / 周一" },
-    { id: "2", name: "王五", originalClass: "四年三班", status: "创客 / 周五" },
-];
+interface TermApi {
+    id: string;
+    code: string;
+    name: string;
+    is_active: boolean;
+}
 
-export default function StudentsPage() {
+interface CampusApi {
+    id: string;
+    name: string;
+    short_name: string | null;
+}
+
+export default async function StudentsPage() {
+    const client = new ApiClient();
+    const [terms, campuses] = await Promise.all([
+        client.get<TermApi[]>("/api/admin/terms"),
+        client.get<CampusApi[]>("/api/admin/campuses"),
+    ]);
+    const mappedTerms: TermOption[] = terms.map((term) => ({
+        id: term.id,
+        code: term.code,
+        name: term.name,
+        isActive: term.is_active,
+    }));
+    const mappedCampuses: CampusOption[] = campuses.map((campus) => ({
+        id: campus.id,
+        name: campus.name,
+        shortName: campus.short_name ?? undefined,
+    }));
+    const activeTerm = mappedTerms.find((term) => term.isActive);
+
     return (
-        <div className="space-y-8">
-            <h1 className="text-2xl font-semibold text-slate-900">学生名册</h1>
-            <SectionCard title="全量学生库">
-                <StudentTable students={MOCK_STUDENTS} />
-            </SectionCard>
-        </div>
+        <StudentRosterDashboard
+            terms={mappedTerms}
+            campuses={mappedCampuses}
+            defaultTermId={activeTerm?.id}
+        />
     );
 }

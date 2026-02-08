@@ -48,13 +48,17 @@
 | 字段 | 类型 | 约束 | 备注 |
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
+| `term_id` | uuid | FK → terms.id ON DELETE CASCADE | 绑定具体学期，支持多学期并行维护 |
 | `campus_id` | uuid | FK → campuses.id ON DELETE RESTRICT | 表示该年级班级所属校区 |
-| `academic_year` | smallint | NOT NULL | 学年，如 2024 |
+| `academic_year` | smallint | NOT NULL | 学年，如 2024（默认取 term.start_date 年份） |
 | `grade_label` | text | NOT NULL | “三年级” |
 | `class_label` | text | NOT NULL | “2 班” |
-| `display_name` | text | UNIQUE(academic_year, display_name) | 例如 “三2班” |
-| `created_at` | timestamptz | default now() | |
-| 组合唯一 | (`campus_id`, `academic_year`, `display_name`) | 同一校区同一学年不可重复 |
+| `display_name` | text | NOT NULL | 例如 “三2班” |
+| `head_teacher_name` | text | NULLABLE | 班主任 |
+| `head_teacher_phone` | text | NULLABLE | 班主任电话 |
+| `notes` | text | NULLABLE | 班级备注 |
+| `created_at` / `updated_at` | timestamptz | default now() | updated_at 由 trigger 维护 |
+| 组合唯一 | (`term_id`, `campus_id`, `display_name`) | 同一学期同校区内不可重复 |
 
 ### 2.2 基础主数据
 | 表名 | 说明 |

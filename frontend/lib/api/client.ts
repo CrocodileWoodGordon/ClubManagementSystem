@@ -40,4 +40,11 @@ export class ApiClient {
         }
         return res.json();
     }
+
+    async delete(path: string): Promise<void> {
+        const res = await fetch(`${this.baseUrl}${path}`, { method: "DELETE" });
+        if (!res.ok) {
+            throw new Error(`DELETE ${path} failed`);
+        }
+    }
 }

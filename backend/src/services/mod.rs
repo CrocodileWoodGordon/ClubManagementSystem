@@ -7,6 +7,7 @@ pub mod excel_import_service;
 pub mod import_placeholder_service;
 pub mod reporting_service;
 pub mod student_import;
+pub mod student_roster_service;
 
 pub use attendance_service::AttendanceService;
 pub use billing_service::BillingService;
@@ -22,3 +23,8 @@ pub use import_placeholder_service::{
 };
 pub use reporting_service::ReportingService;
 pub use student_import::{StudentImportService, StudentImportSummary};
+pub use student_roster_service::{
+    CloneRosterRequest, CloneRosterResult, HomeroomListFilters, HomeroomRosterDto,
+    HomeroomUpdateChanges, NewStudentInput, StudentRecordDto, StudentRosterService,
+    UpdateStudentChanges,
+};

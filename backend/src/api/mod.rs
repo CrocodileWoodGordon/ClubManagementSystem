@@ -7,6 +7,7 @@ mod enrollments;
 mod health;
 mod imports;
 mod reports;
+mod students;
 
 use axum::{
     Router,
@@ -32,6 +33,7 @@ pub fn router(pool: DbPool, frontend_origin: &str) -> Router {
         .nest("/api/attendance", attendance::router())
         .nest("/api/import", imports::router())
         .nest("/api/reports", reports::router())
+        .nest("/api/students", students::router())
         .with_state(state)
         .layer(configure_cors(frontend_origin))
 }

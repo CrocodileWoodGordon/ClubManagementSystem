@@ -5,6 +5,45 @@ export interface Student {
     isTeacherChild: boolean;
 }
 
+export interface HomeroomRoster {
+    id: string;
+    termId: string;
+    campusId: string;
+    campusName: string;
+    academicYear: number;
+    displayName: string;
+    gradeLabel: string;
+    classLabel: string;
+    headTeacherName?: string;
+    headTeacherPhone?: string;
+    notes?: string;
+    studentCount: number;
+}
+
+export interface RosterStudent {
+    id: string;
+    homeroomId: string;
+    fullName: string;
+    studentCode?: string;
+    isTeacherChild: boolean;
+    primaryGuardianName?: string;
+    primaryGuardianPhone?: string;
+    status: string;
+}
+
+export interface StudentImportSummary {
+    jobId: string;
+    totalRows: number;
+    successRows: number;
+    skippedRows: number;
+    errors: StudentImportError[];
+}
+
+export interface StudentImportError {
+    row: number;
+    message: string;
+}
+
 export type ClassStatus = "PLANNED" | "ACTIVE" | "ARCHIVED";
 
 export interface ClassInstance {

@@ -45,11 +45,25 @@
 - `POST /api/classes/assign`  
   请求体：`{ campus_id, club_id, weekday, class_id?, enrollment_ids[] }`。若 `class_id` 为 `null` 表示撤销分班，接口会同步更新报名状态为 `PENDING` 并返回 `updated` 数量。
 
-## 6. 考勤与报表占位接口
+## 6. 学生名册管理
+- `GET /api/students/homerooms`  
+  支持 `term_id`（默认激活学期）、`campus_id`、`search`（模糊匹配班级名/年级）筛选，返回班级列表及 `student_count`、班主任等信息。
+- `PUT /api/students/homerooms/{id}`  
+  请求体可更新 `display_name`、`head_teacher_name/phone`、`notes` 等字段，调用前可通过 `?term_id=` 指定学期。
+- `GET /api/students/homerooms/{id}/students`  
+  列出指定班级下所有在读学生，默认只返回 `ACTIVE` 状态。支持 `?term_id=`。
+- `POST /api/students/homerooms/{id}/students`  
+  新增单个学生，字段包含 `{ full_name, student_code?, primary_guardian_name?, primary_guardian_phone?, is_teacher_child? }`。
+- `PUT /api/students/{id}` / `DELETE /api/students/{id}`  
+  更新或删除（软删 -> `status = INACTIVE`）单个学生，可同时变更其所属班级。
+- `POST /api/students/homerooms/clone`  
+  请求体 `{ source_term_id, target_term_id, campus_id? }`，将来源学期的班级及学生复制到目标学期，若目标学期已有数据则返回校验错误。
+
+## 7. 考勤与报表占位接口
 - `POST /api/attendance/bulk`、`POST /api/attendance/template/{class_id}`：考勤上传/模板生成占位。
 - `GET /api/reports/settlement`、`GET /api/reports/billing`：费用/账单报表占位。
 
-## 7. 调试提示
+## 8. 调试提示
 1. 启动顺序：`docker compose up -d db` → `cd backend && cargo run`（必要时启动前端进行联调）。  
 2. 通过 `docker compose exec db psql -U admin -d club_management -c "SELECT * FROM import_jobs ORDER BY created_at DESC LIMIT 5;"` 检查导入任务。  
 3. 若需重置数据库，参考 `README.md` 的“数据库重建（开发环境）”章节。
