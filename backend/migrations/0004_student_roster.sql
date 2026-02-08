@@ -21,7 +21,7 @@ resolved AS (
                (
                    SELECT t.id
                    FROM terms t
-                   WHERE date_part(year, t.start_date) = h.academic_year
+                   WHERE date_part('year', t.start_date) = h.academic_year
                    ORDER BY t.start_date DESC
                    LIMIT 1
                ),
