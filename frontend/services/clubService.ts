@@ -12,6 +12,7 @@ export class ClubServiceError extends Error {
 
 export interface ClubListParams {
     search?: string;
+    termId?: string;
 }
 
 export interface UpsertClubInput {
@@ -41,7 +42,10 @@ export interface AddClubMembersInput {
 
 export async function fetchClubs(params?: ClubListParams): Promise<Club[]> {
     return safeRequest("获取社团列表失败", async () => {
-        const query = buildQueryString({ search: params?.search });
+        const query = buildQueryString({
+            search: params?.search,
+            term_id: params?.termId,
+        });
         const response = await client.get<ClubListApiResponse>(`/api/clubs${query}`);
         return response.data.map(mapClub);
     });

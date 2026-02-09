@@ -18,6 +18,7 @@ pub struct ClubService<'a> {
 #[derive(Debug, Default)]
 pub struct ClubListFilters {
     pub search: Option<String>,
+    pub term_id: Option<Uuid>,
 }
 
 #[derive(Debug)]
@@ -183,7 +184,7 @@ impl<'a> ClubService<'a> {
             return Ok(clubs);
         }
 
-        if let Some(term_id) = self.active_term_id().await? {
+        if let Some(term_id) = self.resolve_term_id(filters.term_id).await? {
             let placement_map = self.load_placements(term_id).await?;
             for club in &mut clubs {
                 if let Some(items) = placement_map.get(&club.id) {
@@ -574,7 +575,10 @@ impl<'a> ClubService<'a> {
         Ok(map)
     }
 
-    async fn active_term_id(&self) -> Result<Option<Uuid>, AppError> {
+    async fn resolve_term_id(&self, provided: Option<Uuid>) -> Result<Option<Uuid>, AppError> {
+        if provided.is_some() {
+            return Ok(provided);
+        }
         let id = sqlx::query_scalar(
             r#"
                 SELECT id

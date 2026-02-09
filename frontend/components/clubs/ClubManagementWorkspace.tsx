@@ -200,9 +200,10 @@ export function ClubManagementWorkspace({
             setClubError(null);
             try {
                 const keyword = search.trim();
-                const data = await fetchClubs(
-                    keyword.length > 0 ? { search: keyword } : undefined,
-                );
+                const data = await fetchClubs({
+                    search: keyword.length > 0 ? keyword : undefined,
+                    termId: filterTermId,
+                });
                 setClubs(data);
                 if (targetKey) {
                     setSelectedClubKey(targetKey);
@@ -213,7 +214,7 @@ export function ClubManagementWorkspace({
                 setIsRefreshing(false);
             }
         },
-        [search],
+        [search, filterTermId],
     );
 
     const loadMembers = useCallback(async () => {

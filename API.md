@@ -71,7 +71,7 @@
 
 ## 8. 社团管理
 - `GET /api/clubs`  
-  列出全部社团（可用 `?search=` 按名称/编码模糊查询），返回 `code/name/description/material_fee/price_per_session/grace_sessions` 字段，并附带 `placements[]`（若当前激活学期存在报名，则列出该社团在不同校区/星期的组合，数据来源于 `enrollments` 的 `campus_id + requested_weekday`）。
+  列出全部社团，可用 `?search=` 按名称/编码模糊查询，也可用 `?term_id=` 指定学期（默认读取激活学期）。响应返回 `code/name/description/material_fee/price_per_session/grace_sessions` 字段，并附带 `placements[]`：列出该学期内该社团在不同校区/星期出现的报名组合（来源 `enrollments` 的 `campus_id + requested_weekday`），用于前端将“同名社团但校区/星期不同”拆分展示。
 - `POST /api/clubs`  
   新建社团，字段包含 `{ code, name, description?, material_fee?, price_per_session?, grace_sessions? }`，数值字段默认 0/3。
 - `PUT /api/clubs/{id}`  

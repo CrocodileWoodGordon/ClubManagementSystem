@@ -34,16 +34,8 @@ export default async function EnrollmentClubsPage() {
     const client = new ApiClient();
     const errors: string[] = [];
 
-    let clubs: ClubApi[] = [];
     let terms: TermApi[] = [];
     let campuses: CampusApi[] = [];
-
-    try {
-        const response = await client.get<ClubListApiResponse>("/api/clubs");
-        clubs = response.data;
-    } catch (error) {
-        errors.push(parseError("加载社团数据失败", error));
-    }
 
     try {
         terms = await client.get<TermApi[]>("/api/admin/terms");
@@ -55,6 +47,19 @@ export default async function EnrollmentClubsPage() {
         campuses = await client.get<CampusApi[]>("/api/admin/campuses");
     } catch (error) {
         errors.push(parseError("加载校区数据失败", error));
+    }
+
+    const activeTerm = terms.find((term) => term.is_active);
+
+    let clubs: ClubApi[] = [];
+    try {
+        const termQuery = activeTerm ? `?term_id=${activeTerm.id}` : "";
+        const response = await client.get<ClubListApiResponse>(
+            `/api/clubs${termQuery}`,
+        );
+        clubs = response.data;
+    } catch (error) {
+        errors.push(parseError("加载社团数据失败", error));
     }
 
     const mappedClubs: Club[] = clubs.map((club) => ({
@@ -78,7 +83,7 @@ export default async function EnrollmentClubsPage() {
         name: campus.name,
         shortName: campus.short_name ?? undefined,
     }));
-    const activeTerm = termOptions.find((term) => term.isActive);
+    const inferredActiveTerm = termOptions.find((term) => term.isActive);
 
     return (
         <div className="space-y-8">
@@ -86,7 +91,7 @@ export default async function EnrollmentClubsPage() {
                 initialClubs={mappedClubs}
                 terms={termOptions}
                 campuses={campusOptions}
-                defaultTermId={activeTerm?.id}
+                defaultTermId={inferredActiveTerm?.id}
                 initialError={errors[0]}
             />
         </div>

@@ -19,6 +19,7 @@ use crate::{
 #[derive(Debug, Deserialize, Default)]
 pub struct ClubListQuery {
     pub search: Option<String>,
+    pub term_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,6 +91,7 @@ async fn list_clubs(
     let service = ClubService::new(&state.pool);
     let filters = ClubListFilters {
         search: query.search,
+        term_id: query.term_id,
     };
     let clubs = service.list(&filters).await?;
     Ok(Json(ClubListResponse { data: clubs }))
