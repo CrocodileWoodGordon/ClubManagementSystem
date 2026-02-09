@@ -1,5 +1,5 @@
 import { ApiClient } from "@/lib/api/client";
-import type { Club, ClubMember } from "@/lib/types";
+import type { Club, ClubMember, ClubPlacement } from "@/lib/types";
 
 const client = new ApiClient();
 
@@ -154,6 +154,15 @@ function mapClub(data: ClubApi): Club {
         pricePerSession: Number(data.price_per_session),
         graceSessions: data.grace_sessions,
         createdAt: data.created_at,
+        placements: data.placements?.map(mapPlacement),
+    };
+}
+
+function mapPlacement(data: ClubPlacementApi): ClubPlacement {
+    return {
+        campusId: data.campus_id,
+        campusName: data.campus_name,
+        weekday: data.weekday,
     };
 }
 
@@ -219,6 +228,13 @@ interface ClubApi {
     price_per_session: number;
     grace_sessions: number;
     created_at: string;
+    placements?: ClubPlacementApi[];
+}
+
+interface ClubPlacementApi {
+    campus_id: string;
+    campus_name: string;
+    weekday: number;
 }
 
 interface ClubMemberApi {

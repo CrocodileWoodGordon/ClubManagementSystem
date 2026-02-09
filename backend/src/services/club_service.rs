@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -81,6 +81,15 @@ pub struct ClubDto {
     pub price_per_session: f64,
     pub grace_sessions: i16,
     pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub placements: Vec<ClubPlacementDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ClubPlacementDto {
+    pub campus_id: Uuid,
+    pub campus_name: String,
+    pub weekday: u8,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,6 +104,34 @@ pub struct ClubMemberDto {
     pub term_id: Uuid,
     pub requested_weekday: u8,
     pub status: EnrollmentStatus,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct ClubRecord {
+    pub id: Uuid,
+    pub code: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub material_fee: f64,
+    pub price_per_session: f64,
+    pub grace_sessions: i16,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<ClubRecord> for ClubDto {
+    fn from(record: ClubRecord) -> Self {
+        Self {
+            id: record.id,
+            code: record.code,
+            name: record.name,
+            description: record.description,
+            material_fee: record.material_fee,
+            price_per_session: record.price_per_session,
+            grace_sessions: record.grace_sessions,
+            created_at: record.created_at,
+            placements: Vec::new(),
+        }
+    }
 }
 
 impl<'a> ClubService<'a> {
@@ -134,11 +171,28 @@ impl<'a> ClubService<'a> {
 
         builder.push(" ORDER BY name ASC");
 
-        builder
-            .build_query_as::<ClubDto>()
+        let records = builder
+            .build_query_as::<ClubRecord>()
             .fetch_all(self.pool)
             .await
-            .map_err(|err| AppError::Database(err.to_string()))
+            .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let mut clubs: Vec<ClubDto> = records.into_iter().map(ClubDto::from).collect();
+
+        if clubs.is_empty() {
+            return Ok(clubs);
+        }
+
+        if let Some(term_id) = self.active_term_id().await? {
+            let placement_map = self.load_placements(term_id).await?;
+            for club in &mut clubs {
+                if let Some(items) = placement_map.get(&club.id) {
+                    club.placements = items.clone();
+                }
+            }
+        }
+
+        Ok(clubs)
     }
 
     pub async fn create(&self, input: NewClubInput) -> Result<ClubDto, AppError> {
@@ -160,7 +214,7 @@ impl<'a> ClubService<'a> {
         let name = require_text("社团名称", name)?;
         let description = description.and_then(|value| non_empty(&value).map(|v| v.to_string()));
 
-        sqlx::query_as::<_, ClubDto>(
+        sqlx::query_as::<_, ClubRecord>(
             r#"
                 INSERT INTO clubs (code, name, description, material_fee, price_per_session, grace_sessions)
                 VALUES ($1,$2,$3,$4,$5,$6)
@@ -182,6 +236,7 @@ impl<'a> ClubService<'a> {
         .bind(grace_sessions)
         .fetch_one(self.pool)
         .await
+        .map(ClubDto::from)
         .map_err(|err| AppError::Database(err.to_string()))
     }
 
@@ -224,7 +279,7 @@ impl<'a> ClubService<'a> {
         }
         let description = description.and_then(|value| non_empty(&value).map(|v| v.to_string()));
 
-        sqlx::query_as::<_, ClubDto>(
+        sqlx::query_as::<_, ClubRecord>(
             r#"
                 UPDATE clubs
                 SET code = COALESCE($2, code),
@@ -254,6 +309,7 @@ impl<'a> ClubService<'a> {
         .fetch_optional(self.pool)
         .await
         .map_err(|err| AppError::Database(err.to_string()))?
+        .map(|record| record.into())
         .ok_or_else(|| AppError::NotFound("未找到指定社团".into()))
     }
 
@@ -460,6 +516,78 @@ impl<'a> ClubService<'a> {
         rows.into_iter()
             .map(map_member_row)
             .collect::<Result<Vec<_>, _>>()
+    }
+}
+
+impl<'a> ClubService<'a> {
+    async fn load_placements(
+        &self,
+        term_id: Uuid,
+    ) -> Result<HashMap<Uuid, Vec<ClubPlacementDto>>, AppError> {
+        let rows = sqlx::query(
+            r#"
+                SELECT DISTINCT e.club_id,
+                                e.campus_id,
+                                cam.name AS campus_name,
+                                e.requested_weekday AS weekday
+                FROM enrollments e
+                INNER JOIN campuses cam ON cam.id = e.campus_id
+                WHERE e.term_id = $1
+                  AND e.status IN ('PENDING','ACTIVE')
+            "#,
+        )
+        .bind(term_id)
+        .fetch_all(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let mut map: HashMap<Uuid, Vec<ClubPlacementDto>> = HashMap::new();
+        for row in rows {
+            let club_id: Uuid = row
+                .try_get("club_id")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            let campus_id: Uuid = row
+                .try_get("campus_id")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            let campus_name: String = row
+                .try_get("campus_name")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            let weekday: i16 = row
+                .try_get("weekday")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+
+            map.entry(club_id).or_default().push(ClubPlacementDto {
+                campus_id,
+                campus_name,
+                weekday: weekday as u8,
+            });
+        }
+
+        for placements in map.values_mut() {
+            placements.sort_by(|a, b| {
+                a.campus_name
+                    .cmp(&b.campus_name)
+                    .then(a.weekday.cmp(&b.weekday))
+            });
+        }
+
+        Ok(map)
+    }
+
+    async fn active_term_id(&self) -> Result<Option<Uuid>, AppError> {
+        let id = sqlx::query_scalar(
+            r#"
+                SELECT id
+                FROM terms
+                WHERE is_active = true
+                ORDER BY start_date DESC
+                LIMIT 1
+            "#,
+        )
+        .fetch_optional(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+        Ok(id)
     }
 }
 

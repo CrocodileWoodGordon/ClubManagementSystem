@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { SectionCard } from "@/components/common/SectionCard";
-import type { Club, ClubMember, HomeroomRoster, RosterStudent } from "@/lib/types";
+import type {
+    Club,
+    ClubMember,
+    ClubPlacement,
+    HomeroomRoster,
+    RosterStudent,
+} from "@/lib/types";
 import {
     ClubServiceError,
     addClubMembers,
@@ -70,9 +76,8 @@ export function ClubManagementWorkspace({
     const [search, setSearch] = useState<string>("");
     const [clubError, setClubError] = useState<string | null>(initialError ?? null);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [selectedClubId, setSelectedClubId] = useState<string | null>(
-        initialClubs[0]?.id ?? null,
-    );
+    const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+    const [selectedClubKey, setSelectedClubKey] = useState<string | null>(null);
 
     const [editForm, setEditForm] = useState<ClubFormState>(
         buildClubFormState(initialClubs[0]),
@@ -116,12 +121,81 @@ export function ClubManagementWorkspace({
         [clubs, selectedClubId],
     );
 
+    interface DisplayClub {
+        key: string;
+        clubId: string;
+        name: string;
+        code: string;
+        materialFee: number;
+        pricePerSession: number;
+        campusId?: string;
+        campusName?: string;
+        weekday?: number;
+        hasPlacement: boolean;
+    }
+
+    const displayClubs: DisplayClub[] = useMemo(() => {
+        const entries: DisplayClub[] = [];
+        clubs.forEach((club) => {
+            if (club.placements && club.placements.length > 0) {
+                club.placements.forEach((placement) => {
+                    entries.push(buildDisplayClub(club, placement));
+                });
+            } else {
+                entries.push({
+                    key: `${club.id}-unassigned`,
+                    clubId: club.id,
+                    name: club.name,
+                    code: club.code,
+                    materialFee: club.materialFee,
+                    pricePerSession: club.pricePerSession,
+                    hasPlacement: false,
+                });
+            }
+        });
+        return entries;
+    }, [clubs]);
+
+    const handleSelectDisplay = useCallback(
+        (entry: DisplayClub, options: { syncFilters?: boolean } = {}) => {
+            setSelectedClubKey(entry.key);
+            setSelectedClubId(entry.clubId);
+            if (options.syncFilters !== false) {
+                if (entry.campusId) {
+                    setFilterCampusId(entry.campusId);
+                }
+                if (entry.weekday) {
+                    setWeekdayFilter(String(entry.weekday));
+                } else {
+                    setWeekdayFilter("");
+                }
+            }
+        },
+        [],
+    );
+
+    useEffect(() => {
+        if (displayClubs.length === 0) {
+            setSelectedClubId(null);
+            setSelectedClubKey(null);
+            return;
+        }
+        if (!selectedClubKey) {
+            handleSelectDisplay(displayClubs[0], { syncFilters: false });
+            return;
+        }
+        const exists = displayClubs.find((entry) => entry.key === selectedClubKey);
+        if (!exists) {
+            handleSelectDisplay(displayClubs[0], { syncFilters: false });
+        }
+    }, [displayClubs, selectedClubKey, handleSelectDisplay]);
+
     useEffect(() => {
         setEditForm(buildClubFormState(selectedClub ?? undefined));
     }, [selectedClub]);
 
     const refreshClubs = useCallback(
-        async (targetId?: string) => {
+        async (targetKey?: string) => {
             setIsRefreshing(true);
             setClubError(null);
             try {
@@ -130,12 +204,8 @@ export function ClubManagementWorkspace({
                     keyword.length > 0 ? { search: keyword } : undefined,
                 );
                 setClubs(data);
-                if (data.length === 0) {
-                    setSelectedClubId(null);
-                } else if (targetId) {
-                    setSelectedClubId(targetId);
-                } else if (!data.find((club) => club.id === selectedClubId)) {
-                    setSelectedClubId(data[0].id);
+                if (targetKey) {
+                    setSelectedClubKey(targetKey);
                 }
             } catch (error) {
                 setClubError(extractError(error));
@@ -143,7 +213,7 @@ export function ClubManagementWorkspace({
                 setIsRefreshing(false);
             }
         },
-        [search, selectedClubId],
+        [search],
     );
 
     const loadMembers = useCallback(async () => {
@@ -230,7 +300,7 @@ export function ClubManagementWorkspace({
         try {
             const payload = formStateToPayload(createForm);
             const club = await createClub(payload);
-            await refreshClubs(club.id);
+            await refreshClubs(`${club.id}-unassigned`);
             setCreateForm({
                 code: "",
                 name: "",
@@ -255,7 +325,7 @@ export function ClubManagementWorkspace({
         try {
             const payload = formStateToPayload(editForm);
             await updateClub(selectedClubId, payload);
-            await refreshClubs(selectedClubId);
+            await refreshClubs(selectedClubKey ?? undefined);
         } catch (error) {
             setClubError(extractError(error));
         } finally {
@@ -362,29 +432,34 @@ export function ClubManagementWorkspace({
                     <p className="mt-3 text-sm text-rose-600">{clubError}</p>
                 ) : null}
                 <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {clubs.map((club) => (
+                    {displayClubs.map((entry) => (
                         <button
-                            key={club.id}
+                            key={entry.key}
                             type="button"
-                            onClick={() => setSelectedClubId(club.id)}
+                            onClick={() => handleSelectDisplay(entry)}
                             className={[
                                 "rounded-xl border px-4 py-3 text-left transition",
-                                club.id === selectedClubId
+                                entry.key === selectedClubKey
                                     ? "border-indigo-500 bg-indigo-50 shadow"
                                     : "border-slate-200 hover:border-indigo-200",
                             ].join(" ")}
                         >
                             <p className="text-sm font-semibold text-slate-900">
-                                {club.name}
+                                {entry.name}
                             </p>
-                            <p className="text-xs text-slate-500">{club.code}</p>
+                            <p className="text-xs text-slate-500">{entry.code}</p>
                             <p className="text-xs text-slate-500">
-                                材料费 ¥{club.materialFee.toFixed(2)} / 课时费 ¥
-                                {club.pricePerSession.toFixed(2)}
+                                {entry.campusName
+                                    ? `${entry.campusName} · ${formatWeekday(entry.weekday ?? 0)}`
+                                    : "未关联报名"}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                材料费 ¥{entry.materialFee.toFixed(2)} / 课时费 ¥
+                                {entry.pricePerSession.toFixed(2)}
                             </p>
                         </button>
                     ))}
-                    {clubs.length === 0 ? (
+                    {displayClubs.length === 0 ? (
                         <p className="text-sm text-slate-500">
                             暂无社团，请先创建。
                         </p>
@@ -801,6 +876,32 @@ function formStateToPayload(form: ClubFormState) {
     };
 }
 
+function buildDisplayClub(club: Club, placement?: ClubPlacement): DisplayClub {
+    if (placement) {
+        return {
+            key: `${club.id}-${placement.campusId}-${placement.weekday}`,
+            clubId: club.id,
+            name: club.name,
+            code: club.code,
+            materialFee: club.materialFee,
+            pricePerSession: club.pricePerSession,
+            campusId: placement.campusId,
+            campusName: placement.campusName,
+            weekday: placement.weekday,
+            hasPlacement: true,
+        };
+    }
+    return {
+        key: `${club.id}-unassigned`,
+        clubId: club.id,
+        name: club.name,
+        code: club.code,
+        materialFee: club.materialFee,
+        pricePerSession: club.pricePerSession,
+        hasPlacement: false,
+    };
+}
+
 function extractError(error: unknown): string {
     if (error instanceof ClubServiceError) {
         return error.message;
@@ -868,5 +969,11 @@ function SelectField({
 
 function formatWeekday(value: number): string {
     const match = WEEKDAY_OPTIONS.find((item) => item.value === value);
-    return match ? match.label : `周${value}`;
+    if (match) {
+        return match.label;
+    }
+    if (value === 0) {
+        return "未设置";
+    }
+    return `周${value}`;
 }
