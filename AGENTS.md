@@ -79,6 +79,7 @@
 - 2026-02-08：占位文本配置新增 `(跳过)` 默认值，并在数据库侧清理同名社团；前端 `/settings/placeholders` 提供查看/新增/删除占位文本的管理界面。
 - 2026-02-08：新增学生名册后端 API（`/api/students/*`）及前端工作台。`homerooms` 现绑定 `term_id` 并记录班主任信息，支持复用旧学期班级与学生数据。前端“学生名册”页面可筛选学期/校区、导入 Excel、维护班级元信息并对单个学生增删改。
 - 2026-02-08：系统设置新增“学期管理”板块与 `/settings/terms` 页面，`TermSettingsPanel` 支持学期增删改查与快速切换当前学期；后端 `/api/admin/terms` 新增更新、删除、激活接口并同步 `termService` 封装。
+- 2026-02-09：修复 `/api/clubs` 在读取 `material_fee/price_per_session` 时的 NUMERIC 解码报错（改用 BigDecimal 转换），强制按激活学期聚合报名生成 `placements`；报名管理下新增社团管理页面的校区/星期筛选，初始列表直接标注每个社团所属校区+星期组合。
 - 2026-02-09：新增社团管理 API（`/api/clubs/*`），包含社团 CRUD、成员增删接口，删除社团会同步清理相关报名。前端在报名管理下新增“社团管理”子页面，集成 `clubService`，可维护社团基本信息并按学期/校区增删学生报名，删除操作需双重确认。
 - 2026-02-09：`GET /api/clubs` 新增 `term_id` 查询参数并默认使用激活学期，返回值附带该学期报名产生的“校区 + 星期”组合；前端“社团管理”列表据此将同名社团按校区/星期拆分展示。
 
@@ -97,5 +98,5 @@
 - `/app/(admin)/settings/placeholders` 使用 `importPlaceholderService` 调用 `/api/import/placeholders`，支持管理员在前端增删改占位字符串。
 - `frontend/services/studentRosterService.ts` 调用 `/api/students/homerooms`、`/api/students/{id}` 等接口，提供班级列表、班主任信息更新、学生增删改与学期间复用；`/app/(admin)/students` 页面通过 `StudentRosterDashboard` 组合 Excel 导入与名册工作台。
 - `frontend/services/termService.ts` 对接 `/api/admin/terms` 的创建/更新/删除/激活接口，供 `/app/(admin)/settings/terms` 中的 `TermSettingsPanel` 使用以维护学期与当前学期状态。
-- `GET /api/clubs` 响应新增 `placements[]` 字段，代表该社团在当前激活学期下的“校区 + requested_weekday”集合，前端 `ClubManagementWorkspace` 已使用该字段显示标记。
-- `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 进行社团列表、编辑、新增与成员增删管理，成员选择依赖 `studentRosterService` 提供的班级/学生数据。
+- `GET /api/clubs` 默认读取当前激活学期（若无激活学期需显式传 `term_id`），响应附带 `placements[]`：来源于该学期报名的“校区 + requested_weekday”组合，供前端将同名社团拆分为不同校区/星期条目。
+- `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 将社团按校区+星期拆分展示（并支持列表级别的校区/星期筛选），同时负责创建/编辑社团及管理成员，成员选择依赖 `studentRosterService` 提供的班级/学生数据。

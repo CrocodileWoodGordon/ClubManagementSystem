@@ -15,6 +15,13 @@ interface ClubApi {
     price_per_session: number;
     grace_sessions: number;
     created_at: string;
+    placements?: ClubPlacementApi[];
+}
+
+interface ClubPlacementApi {
+    campus_id: string;
+    campus_name: string;
+    weekday: number;
 }
 
 interface TermApi {
@@ -71,6 +78,11 @@ export default async function EnrollmentClubsPage() {
         pricePerSession: Number(club.price_per_session),
         graceSessions: club.grace_sessions,
         createdAt: club.created_at,
+        placements: club.placements?.map((placement) => ({
+            campusId: placement.campus_id,
+            campusName: placement.campus_name,
+            weekday: placement.weekday,
+        })),
     }));
     const termOptions = terms.map((term) => ({
         id: term.id,

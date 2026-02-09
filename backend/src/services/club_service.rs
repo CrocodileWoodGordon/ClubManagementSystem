@@ -5,6 +5,7 @@ use serde::Serialize;
 use sqlx::{
     PgConnection, QueryBuilder, Row,
     postgres::{PgQueryResult, PgRow},
+    types::BigDecimal,
 };
 use uuid::Uuid;
 
@@ -113,26 +114,43 @@ struct ClubRecord {
     pub code: String,
     pub name: String,
     pub description: Option<String>,
-    pub material_fee: f64,
-    pub price_per_session: f64,
+    pub material_fee: BigDecimal,
+    pub price_per_session: BigDecimal,
     pub grace_sessions: i16,
     pub created_at: DateTime<Utc>,
 }
 
 impl From<ClubRecord> for ClubDto {
     fn from(record: ClubRecord) -> Self {
+        let ClubRecord {
+            id,
+            code,
+            name,
+            description,
+            material_fee,
+            price_per_session,
+            grace_sessions,
+            created_at,
+        } = record;
         Self {
-            id: record.id,
-            code: record.code,
-            name: record.name,
-            description: record.description,
-            material_fee: record.material_fee,
-            price_per_session: record.price_per_session,
-            grace_sessions: record.grace_sessions,
-            created_at: record.created_at,
+            id,
+            code,
+            name,
+            description,
+            material_fee: decimal_to_f64(material_fee),
+            price_per_session: decimal_to_f64(price_per_session),
+            grace_sessions,
+            created_at,
             placements: Vec::new(),
         }
     }
+}
+
+fn decimal_to_f64(value: BigDecimal) -> f64 {
+    value
+        .to_string()
+        .parse::<f64>()
+        .unwrap_or(0.0)
 }
 
 impl<'a> ClubService<'a> {
@@ -147,8 +165,8 @@ impl<'a> ClubService<'a> {
                    code,
                    name,
                    description,
-                   material_fee::float8 AS material_fee,
-                   price_per_session::float8 AS price_per_session,
+                   material_fee,
+                   price_per_session,
                    grace_sessions,
                    created_at
             FROM clubs
@@ -184,12 +202,11 @@ impl<'a> ClubService<'a> {
             return Ok(clubs);
         }
 
-        if let Some(term_id) = self.resolve_term_id(filters.term_id).await? {
-            let placement_map = self.load_placements(term_id).await?;
-            for club in &mut clubs {
-                if let Some(items) = placement_map.get(&club.id) {
-                    club.placements = items.clone();
-                }
+        let term_id = self.resolve_term_id(filters.term_id).await?;
+        let placement_map = self.load_placements(term_id).await?;
+        for club in &mut clubs {
+            if let Some(items) = placement_map.get(&club.id) {
+                club.placements = items.clone();
             }
         }
 
@@ -223,8 +240,8 @@ impl<'a> ClubService<'a> {
                           code,
                           name,
                           description,
-                          material_fee::float8 AS material_fee,
-                          price_per_session::float8 AS price_per_session,
+                          material_fee,
+                          price_per_session,
                           grace_sessions,
                           created_at
             "#,
@@ -294,8 +311,8 @@ impl<'a> ClubService<'a> {
                           code,
                           name,
                           description,
-                          material_fee::float8 AS material_fee,
-                          price_per_session::float8 AS price_per_session,
+                          material_fee,
+                          price_per_session,
                           grace_sessions,
                           created_at
             "#,
@@ -575,9 +592,9 @@ impl<'a> ClubService<'a> {
         Ok(map)
     }
 
-    async fn resolve_term_id(&self, provided: Option<Uuid>) -> Result<Option<Uuid>, AppError> {
-        if provided.is_some() {
-            return Ok(provided);
+    async fn resolve_term_id(&self, provided: Option<Uuid>) -> Result<Uuid, AppError> {
+        if let Some(id) = provided {
+            return Ok(id);
         }
         let id = sqlx::query_scalar(
             r#"
@@ -591,7 +608,7 @@ impl<'a> ClubService<'a> {
         .fetch_optional(self.pool)
         .await
         .map_err(|err| AppError::Database(err.to_string()))?;
-        Ok(id)
+        id.ok_or_else(|| AppError::Validation("未找到激活学期，请提供 term_id".into()))
     }
 }
 

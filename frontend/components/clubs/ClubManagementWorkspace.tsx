@@ -74,6 +74,8 @@ export function ClubManagementWorkspace({
 }: ClubManagementWorkspaceProps) {
     const [clubs, setClubs] = useState<Club[]>(initialClubs);
     const [search, setSearch] = useState<string>("");
+    const [listCampusFilter, setListCampusFilter] = useState<string>("");
+    const [listWeekdayFilter, setListWeekdayFilter] = useState<string>("");
     const [clubError, setClubError] = useState<string | null>(initialError ?? null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
@@ -156,6 +158,28 @@ export function ClubManagementWorkspace({
         return entries;
     }, [clubs]);
 
+    const filteredDisplayClubs = useMemo(() => {
+        const campusFilter = listCampusFilter.trim();
+        const weekdayFilter = listWeekdayFilter ? Number(listWeekdayFilter) : undefined;
+
+        return displayClubs.filter((entry) => {
+            if (campusFilter && entry.campusId !== campusFilter) {
+                return false;
+            }
+            if (
+                weekdayFilter !== undefined &&
+                weekdayFilter > 0 &&
+                entry.weekday !== weekdayFilter
+            ) {
+                return false;
+            }
+            if ((campusFilter || weekdayFilter) && !entry.hasPlacement) {
+                return false;
+            }
+            return true;
+        });
+    }, [displayClubs, listCampusFilter, listWeekdayFilter]);
+
     const handleSelectDisplay = useCallback(
         (entry: DisplayClub, options: { syncFilters?: boolean } = {}) => {
             setSelectedClubKey(entry.key);
@@ -174,21 +198,29 @@ export function ClubManagementWorkspace({
         [],
     );
 
+    const visibleDisplayClubs = useMemo(() => {
+        const hasFilters =
+            listCampusFilter.trim().length > 0 || listWeekdayFilter.length > 0;
+        return hasFilters ? filteredDisplayClubs : displayClubs;
+    }, [filteredDisplayClubs, displayClubs, listCampusFilter, listWeekdayFilter]);
+
     useEffect(() => {
-        if (displayClubs.length === 0) {
+        if (visibleDisplayClubs.length === 0) {
             setSelectedClubId(null);
             setSelectedClubKey(null);
             return;
         }
         if (!selectedClubKey) {
-            handleSelectDisplay(displayClubs[0], { syncFilters: false });
+            handleSelectDisplay(visibleDisplayClubs[0], { syncFilters: false });
             return;
         }
-        const exists = displayClubs.find((entry) => entry.key === selectedClubKey);
+        const exists = visibleDisplayClubs.find(
+            (entry) => entry.key === selectedClubKey,
+        );
         if (!exists) {
-            handleSelectDisplay(displayClubs[0], { syncFilters: false });
+            handleSelectDisplay(visibleDisplayClubs[0], { syncFilters: false });
         }
-    }, [displayClubs, selectedClubKey, handleSelectDisplay]);
+    }, [visibleDisplayClubs, selectedClubKey, handleSelectDisplay]);
 
     useEffect(() => {
         setEditForm(buildClubFormState(selectedClub ?? undefined));
@@ -429,11 +461,55 @@ export function ClubManagementWorkspace({
                         {isRefreshing ? "加载中..." : "查询"}
                     </button>
                 </div>
+                <div className="flex flex-wrap gap-3 pt-3 text-sm text-slate-700">
+                    <label className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">校区筛选</span>
+                        <select
+                            value={listCampusFilter}
+                            onChange={(event) => setListCampusFilter(event.target.value)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+                        >
+                            <option value="">全部</option>
+                            {campuses.map((campus) => (
+                                <option key={campus.id} value={campus.id}>
+                                    {campus.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">星期筛选</span>
+                        <select
+                            value={listWeekdayFilter}
+                            onChange={(event) => setListWeekdayFilter(event.target.value)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+                        >
+                            <option value="">全部</option>
+                            {WEEKDAY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    {(listCampusFilter || listWeekdayFilter) && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setListCampusFilter("");
+                                setListWeekdayFilter("");
+                            }}
+                            className="text-xs font-medium text-indigo-600 hover:underline"
+                        >
+                            清除筛选
+                        </button>
+                    )}
+                </div>
                 {clubError ? (
                     <p className="mt-3 text-sm text-rose-600">{clubError}</p>
                 ) : null}
                 <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {displayClubs.map((entry) => (
+                    {visibleDisplayClubs.map((entry) => (
                         <button
                             key={entry.key}
                             type="button"
@@ -460,7 +536,7 @@ export function ClubManagementWorkspace({
                             </p>
                         </button>
                     ))}
-                    {displayClubs.length === 0 ? (
+                    {visibleDisplayClubs.length === 0 ? (
                         <p className="text-sm text-slate-500">
                             暂无社团，请先创建。
                         </p>
