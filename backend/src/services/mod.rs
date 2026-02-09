@@ -1,6 +1,7 @@
 pub mod attendance_service;
 pub mod billing_service;
 pub mod class_assignment_service;
+pub mod club_service;
 pub mod enrollment_import;
 pub mod enrollment_service;
 pub mod excel_import_service;
@@ -12,6 +13,10 @@ pub mod student_roster_service;
 pub use attendance_service::AttendanceService;
 pub use billing_service::BillingService;
 pub use class_assignment_service::ClassAssignmentService;
+pub use club_service::{
+    AddMembersRequest, ClubDto, ClubListFilters, ClubMemberDto, ClubMemberFilters, ClubService,
+    ClubUpdateChanges, MembershipEntry, NewClubInput,
+};
 pub use enrollment_import::{EnrollmentImportColumns, EnrollmentImportService};
 pub use enrollment_service::{
     EnrollmentFilters, EnrollmentService, EnrollmentSlotFilters, EnrollmentSummaryFilters,

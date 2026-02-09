@@ -75,6 +75,30 @@ export interface ClassInstance {
 
 export type EnrollmentStatus = "PENDING" | "ACTIVE" | "DROPPED" | "TRANSFERRED_OUT" | "TRANSFERRED_IN";
 
+export interface Club {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    materialFee: number;
+    pricePerSession: number;
+    graceSessions: number;
+    createdAt: string;
+}
+
+export interface ClubMember {
+    enrollmentId: string;
+    studentId: string;
+    studentName: string;
+    studentCode?: string;
+    homeroom: string;
+    campusId: string;
+    campusName: string;
+    termId: string;
+    requestedWeekday: number;
+    status: EnrollmentStatus;
+}
+
 export interface PendingEnrollment {
     enrollmentId: string;
     studentId: string;

@@ -69,7 +69,23 @@
 - `POST /api/attendance/bulk`、`POST /api/attendance/template/{class_id}`：考勤上传/模板生成占位。
 - `GET /api/reports/settlement`、`GET /api/reports/billing`：费用/账单报表占位。
 
-## 8. 调试提示
+## 8. 社团管理
+- `GET /api/clubs`  
+  列出全部社团（可用 `?search=` 按名称/编码模糊查询），返回 `code/name/description/material_fee/price_per_session/grace_sessions` 等字段。
+- `POST /api/clubs`  
+  新建社团，字段包含 `{ code, name, description?, material_fee?, price_per_session?, grace_sessions? }`，数值字段默认 0/3。
+- `PUT /api/clubs/{id}`  
+  局部更新任意字段，传空白字符串会视为清空对应值，若找不到记录返回 404。
+- `DELETE /api/clubs/{id}`  
+  删除社团前会同步清理该社团下的所有 `enrollments`、`classes`，操作不可恢复。
+- `GET /api/clubs/{id}/members`  
+  必填 `term_id`、`campus_id`，可选 `weekday`。返回匹配组合下社团成员（仅 `PENDING/ACTIVE` 状态），附带班级、星期与状态等信息。
+- `POST /api/clubs/{id}/members`  
+  批量添加成员，请求体 `{ term_id, campus_id, entries: [{ student_id, requested_weekday }, ...] }`。会校验学生是否属于指定学期/校区，成功后返回新增成员详情。
+- `DELETE /api/clubs/{id}/members/{enrollment_id}`  
+  将指定报名记录标记为 `DROPPED` 并清空`class_id`，用于在前端移除成员。
+
+## 9. 调试提示
 1. 启动顺序：`docker compose up -d db` → `cd backend && cargo run`（必要时启动前端进行联调）。  
 2. 通过 `docker compose exec db psql -U admin -d club_management -c "SELECT * FROM import_jobs ORDER BY created_at DESC LIMIT 5;"` 检查导入任务。  
 3. 若需重置数据库，参考 `README.md` 的“数据库重建（开发环境）”章节。
