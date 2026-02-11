@@ -103,12 +103,27 @@ export function TermSettingsPanel({ initialTerms }: Props) {
             if (isEditing && editingId) {
                 const updated = await updateTerm(editingId, formState);
                 setTerms((prev) =>
-                    sortTerms(prev.map((term) => (term.id === updated.id ? updated : term))),
+                    sortTerms(
+                        prev.map((term) => {
+                            if (term.id === updated.id) {
+                                return updated;
+                            }
+                            if (updated.isActive) {
+                                return { ...term, isActive: false };
+                            }
+                            return term;
+                        }),
+                    ),
                 );
                 setFeedback({ type: "success", text: "学期信息已更新" });
             } else {
                 const created = await createTerm(formState);
-                setTerms((prev) => sortTerms([...prev, created]));
+                setTerms((prev) => {
+                    const normalized = created.isActive
+                        ? prev.map((term) => ({ ...term, isActive: false }))
+                        : prev;
+                    return sortTerms([...normalized, created]);
+                });
                 setFeedback({ type: "success", text: "学期已创建" });
             }
             resetForm();

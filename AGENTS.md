@@ -82,6 +82,7 @@
 - 2026-02-09：修复 `/api/clubs` 在读取 `material_fee/price_per_session` 时的 NUMERIC 解码报错（改用 BigDecimal 转换），强制按激活学期聚合报名生成 `placements`；报名管理下新增社团管理页面的校区/星期筛选，初始列表直接标注每个社团所属校区+星期组合。
 - 2026-02-09：新增社团管理 API（`/api/clubs/*`），包含社团 CRUD、成员增删接口，删除社团会同步清理相关报名。前端在报名管理下新增“社团管理”子页面，集成 `clubService`，可维护社团基本信息并按学期/校区增删学生报名，删除操作需双重确认。
 - 2026-02-09：`GET /api/clubs` 新增 `term_id` 查询参数并默认使用激活学期，返回值附带该学期报名产生的“校区 + 星期”组合；前端“社团管理”列表据此将同名社团按校区/星期拆分展示。
+- 2026-02-11：修复学期激活流程：后端 `POST /api/admin/terms/{id}/activate` 先统一取消其他激活学期后再设定目标学期，前端 `TermSettingsPanel` 创建/保存并设为当前后立即在列表中反映最新的唯一激活状态。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
