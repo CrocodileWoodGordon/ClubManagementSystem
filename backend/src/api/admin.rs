@@ -264,6 +264,23 @@ async fn activate_term(
         .await
         .map_err(|err| AppError::Database(err.to_string()))?;
 
+    let exists =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM terms WHERE id = $1 FOR UPDATE")
+            .bind(term_id)
+            .fetch_optional(tx.as_mut())
+            .await
+            .map_err(|err| AppError::Database(err.to_string()))?;
+
+    if exists.is_none() {
+        return Err(AppError::NotFound("未找到对应学期".into()));
+    }
+
+    sqlx::query("UPDATE terms SET is_active = false WHERE id <> $1 AND is_active = true")
+        .bind(term_id)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
     let row = sqlx::query_as::<_, TermDto>(
         r#"
             UPDATE terms
@@ -280,12 +297,6 @@ async fn activate_term(
     let Some(row) = row else {
         return Err(AppError::NotFound("未找到对应学期".into()));
     };
-
-    sqlx::query("UPDATE terms SET is_active = false WHERE id <> $1 AND is_active = true")
-        .bind(term_id)
-        .execute(tx.as_mut())
-        .await
-        .map_err(|err| AppError::Database(err.to_string()))?;
 
     tx.commit()
         .await
