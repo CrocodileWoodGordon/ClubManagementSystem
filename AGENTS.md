@@ -84,6 +84,7 @@
 - 2026-02-09：`GET /api/clubs` 新增 `term_id` 查询参数并默认使用激活学期，返回值附带该学期报名产生的“校区 + 星期”组合；前端“社团管理”列表据此将同名社团按校区/星期拆分展示。
 - 2026-02-11：修复学期激活流程：后端 `POST /api/admin/terms/{id}/activate` 先统一取消其他激活学期后再设定目标学期，前端 `TermSettingsPanel` 创建/保存并设为当前后立即在列表中反映最新的唯一激活状态。
 - 2026-02-11：报名导入结果新增 `EnrollmentImportOutcome.id` 唯一标识，并在导入服务中兜底处理 `ux_enrollments_active` 冲突；前端 `EnrollmentImportPanel` 使用该 id 作为 React key，重复上传同一文件仅标记为“已跳过”且不再出现重复 key 报错。
+- 2026-02-11：`EnrollmentImportPanel` 新增“Excel 列映射”设置，可在上传前启用自定义学生列与周一~周五社团列，并通过 `config` 字段传至 `/api/import/enrollments`，兼容非标准模板。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
