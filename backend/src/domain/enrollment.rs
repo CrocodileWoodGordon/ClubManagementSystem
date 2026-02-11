@@ -77,6 +77,8 @@ pub struct EnrollmentDraft {
 /// 导入单行处理后的反馈，便于 API 返回详细错误。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnrollmentImportOutcome {
+    /// 前端渲染用的唯一标识，避免同一 Excel 行多社团冲突。
+    pub id: Uuid,
     /// 对应的 Excel 行（1-based）。
     pub source_row: u32,
     pub draft: Option<EnrollmentDraft>,

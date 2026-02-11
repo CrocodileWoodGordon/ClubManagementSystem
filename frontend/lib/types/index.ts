@@ -152,6 +152,7 @@ export interface EnrollmentImportDraft {
 }
 
 export interface EnrollmentImportOutcome {
+    id: string;
     sourceRow: number;
     draft?: EnrollmentImportDraft;
     status: EnrollmentImportStatus;

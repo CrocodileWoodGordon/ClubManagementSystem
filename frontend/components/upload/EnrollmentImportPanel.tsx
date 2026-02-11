@@ -85,7 +85,7 @@ function OutcomeTable({ outcomes }: { outcomes: EnrollmentImportOutcome[] }) {
                 </thead>
                 <tbody>
                     {outcomes.map((outcome) => (
-                        <tr key={`outcome-${outcome.sourceRow}`} className="border-t">
+                        <tr key={outcome.id} className="border-t">
                             <td className="px-3 py-2 text-slate-600">{outcome.sourceRow}</td>
                             <td className="px-3 py-2 text-slate-900">
                                 {outcome.draft?.studentFullName ?? "--"}

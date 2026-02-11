@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 use serde_json::json;
-use sqlx::{Postgres, Row, Transaction};
+use sqlx::{Error as SqlxError, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -607,6 +607,7 @@ async fn process_single_draft(
         Some(record) => record,
         None => {
             return Ok(EnrollmentImportOutcome {
+                id: Uuid::new_v4(),
                 source_row: draft.source_row,
                 draft: Some(draft),
                 status: EnrollmentImportStatus::Failed,
@@ -623,6 +624,7 @@ async fn process_single_draft(
         Ok(record) => record,
         Err(AppError::Validation(message)) => {
             return Ok(EnrollmentImportOutcome {
+                id: Uuid::new_v4(),
                 source_row: draft.source_row,
                 draft: Some(draft),
                 status: EnrollmentImportStatus::Failed,
@@ -639,6 +641,7 @@ async fn process_single_draft(
     );
     if !seen_pairs.insert(dedup_key.clone()) {
         return Ok(EnrollmentImportOutcome {
+            id: Uuid::new_v4(),
             source_row: draft.source_row,
             draft: Some(draft),
             status: EnrollmentImportStatus::Skipped,
@@ -670,6 +673,7 @@ async fn process_single_draft(
 
     if existing.is_some() {
         return Ok(EnrollmentImportOutcome {
+            id: Uuid::new_v4(),
             source_row: draft.source_row,
             draft: Some(draft),
             status: EnrollmentImportStatus::Skipped,
@@ -678,7 +682,7 @@ async fn process_single_draft(
         });
     }
 
-    let inserted_row = sqlx::query(
+    let insert_result = sqlx::query(
         r#"
             INSERT INTO enrollments (term_id, campus_id, student_id, club_id, requested_weekday, import_job_id)
             VALUES ($1,$2,$3,$4,$5,$6)
@@ -692,14 +696,32 @@ async fn process_single_draft(
     .bind(draft.requested_weekday as i16)
     .bind(job_id)
     .fetch_one(tx.as_mut())
-    .await
-    .map_err(|err| AppError::Database(err.to_string()))?;
+    .await;
 
-    let enrollment_id: Uuid = inserted_row
+    let row = match insert_result {
+        Ok(row) => row,
+        Err(SqlxError::Database(db_err)) => {
+            if matches!(db_err.constraint(), Some("ux_enrollments_active")) {
+                return Ok(EnrollmentImportOutcome {
+                    id: Uuid::new_v4(),
+                    source_row: draft.source_row,
+                    draft: Some(draft),
+                    status: EnrollmentImportStatus::Skipped,
+                    enrollment_id: None,
+                    message: Some("学生已存在相同社团/星期的有效报名记录，保持原数据不变".into()),
+                });
+            }
+            return Err(AppError::Database(db_err.to_string()));
+        }
+        Err(other) => return Err(AppError::Database(other.to_string())),
+    };
+
+    let enrollment_id: Uuid = row
         .try_get("id")
         .map_err(|err| AppError::Database(err.to_string()))?;
 
     Ok(EnrollmentImportOutcome {
+        id: Uuid::new_v4(),
         source_row: draft.source_row,
         draft: Some(draft),
         status: EnrollmentImportStatus::Created,

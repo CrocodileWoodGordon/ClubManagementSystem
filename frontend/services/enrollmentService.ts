@@ -175,6 +175,7 @@ function mapEnrollmentImportOutcome(
     data: EnrollmentImportOutcomeApi,
 ): EnrollmentImportOutcome {
     return {
+        id: data.id,
         sourceRow: data.source_row,
         draft: data.draft ? mapEnrollmentImportDraft(data.draft) : undefined,
         status: data.status,
@@ -268,6 +269,7 @@ interface EnrollmentImportResponse {
 }
 
 interface EnrollmentImportOutcomeApi {
+    id: string;
     source_row: number;
     draft: EnrollmentImportDraftApi | null;
     status: EnrollmentImportOutcome["status"];
