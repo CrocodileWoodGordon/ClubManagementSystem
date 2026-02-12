@@ -5,6 +5,7 @@ mod attendance;
 mod classes;
 mod clubs;
 mod enrollments;
+mod enrollment_status;
 mod health;
 mod imports;
 mod reports;
@@ -30,6 +31,7 @@ pub fn router(pool: DbPool, frontend_origin: &str) -> Router {
         .merge(health::router())
         .nest("/api/admin", admin::router())
         .nest("/api/enrollments", enrollments::router())
+        .nest("/api/enrollment-status", enrollment_status::router())
         .nest("/api/classes", classes::router())
         .nest("/api/clubs", clubs::router())
         .nest("/api/attendance", attendance::router())
