@@ -88,6 +88,8 @@
 - 2026-02-12：落地考勤领域模型（`backend/src/domain/attendance.rs`），覆盖考勤状态、课次键、记录与导入批次结构，提供 SQLx/Excel DTO 的 `TryFrom` 与校验 helper，并以 `cargo test domain::attendance` 验证。
 - 2026-02-12：新增考勤服务（`backend/src/services/attendance.rs`），实现模板生成、Excel 导入解析与幂等写库计划；`cargo test services::attendance` 用于验证模板行数、占位符过滤与插入/更新策略。
 - 2026-02-12：实现考勤 API（`GET /api/attendance/template/{id}`、`POST /api/attendance/import`、`GET /api/attendance`），串联班级排课、Roster、Excel 解析与 `attendance_records` 写入，响应包含模板数据与导入插入/更新统计。
+- 2026-02-12：完成前端考勤工作台，新增 `attendanceService.ts`、`/app/(admin)/attendance` 页面与 `loading.tsx`，支持筛班级、下载模板、导入 Excel 并查看历史记录，已通过 `npm run lint` / `npm run dev` 验证。
+- 2026-02-12：复核考勤页面交互与下载逻辑，修复 CSV 转义/依赖数组等细节，新增 `AttendanceServiceError` 包装并重跑 `npm run lint`、`npm run dev` 确认通过。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

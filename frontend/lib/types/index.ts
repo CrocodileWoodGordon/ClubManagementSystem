@@ -168,3 +168,66 @@ export interface ImportPlaceholderConfig {
     updatedBy?: string;
     updatedAt: string;
 }
+
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "EXCUSED" | "LEAVE";
+
+export interface AttendanceClassOverview {
+    id: string;
+    termId: string;
+    campusId: string;
+    clubId: string;
+    classCode: string;
+    weekday: number;
+    startTime: string;
+    endTime: string;
+    location?: string;
+    capacity?: number;
+    notes?: string;
+}
+
+export interface AttendanceMeeting {
+    id: string;
+    meetingDate: string;
+    sessionNumber: number;
+}
+
+export interface AttendanceWorksheet {
+    name: string;
+    rows: string[][];
+}
+
+export interface AttendanceTemplate {
+    class: AttendanceClassOverview;
+    meetings: AttendanceMeeting[];
+    worksheet: AttendanceWorksheet;
+}
+
+export interface AttendanceRecord {
+    id: string;
+    classMeetingId: string;
+    meetingDate: string;
+    sessionNumber: number;
+    enrollmentId: string;
+    studentId: string;
+    studentName: string;
+    studentIdentifier: string;
+    status: AttendanceStatus;
+    minutesAttended?: number;
+    recordedBy?: string;
+    recordedAt: string;
+}
+
+export interface AttendanceImportSkippedRow {
+    sourceRow: number;
+    studentIdentifier: string;
+    status: AttendanceStatus;
+    minutesAttended?: number;
+    note?: string;
+}
+
+export interface AttendanceImportResult {
+    batchId: string;
+    inserted: number;
+    updated: number;
+    skipped: AttendanceImportSkippedRow[];
+}
