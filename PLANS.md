@@ -62,25 +62,29 @@
     - 预期修改文件：`frontend/components/forms/BulkAssignmentForm.tsx`
     - 衔接：完成“分班”业务闭环。
 
-12. **建模考勤记录**
-    - 目标：在 `backend/src/domain/attendance.rs` 定义 daily_session、presence_status、import batch 等结构。
-    - 预期修改文件：`backend/src/domain/attendance.rs`
-    - 衔接：为考勤导入与结算准备数据结构。
+12. **落地考勤领域模型**
+    - 目标：依据 `DATABASE.md` 在 `backend/src/domain/attendance.rs` 定义 `AttendanceStatus`、`AttendanceSessionKey`、`AttendanceRecord`、`AttendanceImportBatch` 等结构，并提供 SQLx row/Excel DTO 的 `TryFrom` 与校验 helper。
+    - 预期修改文件：`backend/src/domain/attendance.rs`、`backend/src/domain/mod.rs`
+    - 验证：在 `backend` 目录执行 `cargo test domain::attendance`，覆盖状态转换与模板校验单测。
+    - 衔接：服务层与 API 直接复用统一模型，避免后续重复定义。
 
 13. **实现考勤导入/导出服务**
-    - 目标：新增 `backend/src/services/attendance.rs`，提供考勤模板导出与导入、历史保留逻辑。
-    - 预期修改文件：`backend/src/services/attendance.rs`
-    - 衔接：后续 API 和结算将依赖此服务。
+    - 目标：新增 `backend/src/services/attendance.rs`，实现空模板生成（含班级/周次/日期列）、Excel 导入解析、历史批次保留与幂等写入，复用 `utils/excel` 并处理缺席/调课学生过滤。
+    - 预期修改文件：`backend/src/services/attendance.rs`、`backend/src/services/mod.rs`
+    - 验证：在 `backend` 目录运行 `cargo test services::attendance`，对模板行数与导入规则写集成单测。
+    - 衔接：API 仅需薄封装即可使用该服务，也是结算逻辑依赖的数据入口。
 
 14. **暴露考勤 API**
-    - 目标：在 `backend/src/api/attendance.rs` 定义导出、导入、查询端点。
-    - 预期修改文件：`backend/src/api/attendance.rs`
-    - 衔接：允许前端 attendance 页面读写考勤。
+    - 目标：添加 `backend/src/api/attendance.rs`，实现 `GET /api/attendance/template/{class_id}`、`POST /api/attendance/import`（multipart）与 `GET /api/attendance?class_id=` 查询，并在 `api/mod.rs` 注册路由与 CORS。
+    - 预期修改文件：`backend/src/api/attendance.rs`、`backend/src/api/mod.rs`
+    - 验证：运行 `cargo run` 后，使用 `curl --noproxy "*"` 请求模板导出/历史查询/导入上传文件，确认 200 与错误提示。
+    - 衔接：前端和 QA 可以直接通过 HTTP 验证考勤流程。
 
 15. **实现前端考勤页面**
-    - 目标：完善 `frontend/(admin)/attendance/page.tsx`，展示导出的模板及导入结果，调用步骤 14 的接口。
-    - 预期修改文件：`frontend/(admin)/attendance/page.tsx`
-    - 衔接：使考勤流程可视化。
+    - 目标：完善 `frontend/app/(admin)/attendance/page.tsx`，新建 `frontend/services/attendanceService.ts` 封装下载/上传/历史查询逻辑，并提供 `frontend/app/(admin)/attendance/loading.tsx` 骨架屏，页面内支持筛班级、下载模板、上传 Excel 后展示逐行反馈。
+    - 预期修改文件：`frontend/services/attendanceService.ts`、`frontend/app/(admin)/attendance/page.tsx`、`frontend/app/(admin)/attendance/loading.tsx`
+    - 验证：在 `frontend` 目录执行 `npm run lint` 与 `npm run dev`，配合步骤 14 API 实测模板下载和导入提示。
+    - 衔接：管理员可在前端独立完成考勤导出/导入，为后续结算提供已验证数据。
 
 16. **处理换课/退课领域**
     - 目标：在 `backend/src/domain/enrollment_status.rs` 定义状态机与规则（材料费共享、三节内退课免课时费等）。
