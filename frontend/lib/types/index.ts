@@ -246,3 +246,21 @@ export interface AttendanceImportResult {
     updated: number;
     skipped: AttendanceImportSkippedRow[];
 }
+
+export type TuitionWaiverReason =
+    | "DROP_WITHIN_GRACE"
+    | "MANUAL_OVERRIDE"
+    | "TEACHER_BENEFIT";
+
+export interface FeeBreakdown {
+    enrollmentId: string;
+    studentId: string;
+    classId: string;
+    materialFee: number;
+    lessonFee: number;
+    discountAmount: number;
+    attendanceCount: number;
+    chargedSessions: number;
+    waiveReason?: TuitionWaiverReason;
+    remarks?: string;
+}
