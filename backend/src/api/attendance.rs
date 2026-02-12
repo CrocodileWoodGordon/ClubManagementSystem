@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::api::ApiState;
 use crate::domain::{AttendanceRecord, AttendanceStatus};
-use crate::services::attendance_service::AttendanceService;
+use crate::services::attendance::AttendanceService;
 
 #[derive(Debug, Deserialize)]
 pub struct AttendancePayload {

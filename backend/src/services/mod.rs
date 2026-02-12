@@ -1,4 +1,4 @@
-pub mod attendance_service;
+pub mod attendance;
 pub mod billing_service;
 pub mod class_assignment_service;
 pub mod club_service;
@@ -10,7 +10,7 @@ pub mod reporting_service;
 pub mod student_import;
 pub mod student_roster_service;
 
-pub use attendance_service::AttendanceService;
+pub use attendance::AttendanceService;
 pub use billing_service::BillingService;
 pub use class_assignment_service::ClassAssignmentService;
 pub use club_service::{

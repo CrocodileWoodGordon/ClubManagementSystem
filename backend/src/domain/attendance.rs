@@ -221,6 +221,7 @@ impl TryFrom<AttendanceExcelRow> for AttendanceImportRow {
 pub struct AttendanceImportBatch {
     pub batch_id: Uuid,
     pub import_job_id: Option<Uuid>,
+    pub class_meeting_id: Uuid,
     pub session: AttendanceSessionKey,
     pub recorded_by: Option<String>,
     pub submitted_at: DateTime<Utc>,
@@ -230,6 +231,7 @@ pub struct AttendanceImportBatch {
 impl AttendanceImportBatch {
     pub fn new(
         session: AttendanceSessionKey,
+        class_meeting_id: Uuid,
         recorded_by: Option<String>,
         rows: Vec<AttendanceImportRow>,
         import_job_id: Option<Uuid>,
@@ -245,6 +247,7 @@ impl AttendanceImportBatch {
         Ok(Self {
             batch_id: Uuid::new_v4(),
             import_job_id,
+            class_meeting_id,
             session,
             recorded_by: normalize_note(recorded_by),
             submitted_at: Utc::now(),
@@ -358,8 +361,10 @@ mod tests {
         let meeting_date = NaiveDate::from_ymd_opt(2026, 4, 1).unwrap();
         let session = AttendanceSessionKey::new(class_id, meeting_date, 1).unwrap();
 
+        let meeting_id = Uuid::new_v4();
+
         assert!(matches!(
-            AttendanceImportBatch::new(session, None, Vec::new(), None),
+            AttendanceImportBatch::new(session, meeting_id, None, Vec::new(), None),
             Err(AttendanceValidationError::EmptyBatch)
         ));
 
@@ -372,6 +377,6 @@ mod tests {
             note: None,
         };
 
-        assert!(AttendanceImportBatch::new(session, Some("Bob".into()), vec![row], None).is_ok());
+        assert!(AttendanceImportBatch::new(session, meeting_id, Some("Bob".into()), vec![row], None).is_ok());
     }
 }
