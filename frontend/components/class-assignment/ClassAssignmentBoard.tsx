@@ -65,6 +65,10 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
         () => collectWeekdays(summaryRows, selectedCampus, selectedClub),
         [summaryRows, selectedCampus, selectedClub],
     );
+    const unassignedCount = useMemo(
+        () => students.reduce((count, student) => (student.classId ? count : count + 1), 0),
+        [students],
+    );
 
     const hasSelection = Boolean(selectedCampus && selectedClub && selectedWeekday);
     const selectedWeekdayNumber = selectedWeekday ? Number(selectedWeekday) : 0;
@@ -396,6 +400,7 @@ export function ClassAssignmentBoard({ summaryRows }: Props) {
                 <div className="space-y-6">
                     <ClassListPanel
                         classes={classes}
+                        unassignedCount={unassignedCount}
                         classForm={classForm}
                         classFormError={classFormError}
                         editingClassId={editingClassId}
@@ -469,6 +474,7 @@ function FilterControl({
 
 function ClassListPanel({
     classes,
+    unassignedCount,
     classForm,
     classFormError,
     editingClassId,
@@ -479,6 +485,7 @@ function ClassListPanel({
     onCancelEdit,
 }: {
     classes: ClassInstance[];
+    unassignedCount: number;
     classForm: {
         classCode: string;
         startTime: string;
@@ -503,6 +510,8 @@ function ClassListPanel({
     onCancelEdit: () => void;
 }) {
     const isEditing = Boolean(editingClassId);
+    const unassignedTextClass =
+        unassignedCount > 0 ? "text-amber-600" : "text-emerald-600";
     return (
         <div className="space-y-3 rounded-xl border border-dashed border-slate-200 p-4">
             <div className="flex flex-col gap-1">
@@ -510,6 +519,9 @@ function ClassListPanel({
                 <p className="text-xs text-slate-500">
                     维护上课时间、地点并实时查看已分配人数。
                     {isEditing ? " 当前处于编辑模式，修改完成后请保存或取消。" : ""}
+                </p>
+                <p className={`text-xs font-medium ${unassignedTextClass}`}>
+                    剩余未分配学生：{unassignedCount} 人
                 </p>
             </div>
             {classes.length === 0 ? (
