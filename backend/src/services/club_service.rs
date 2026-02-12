@@ -294,6 +294,10 @@ impl<'a> ClubService<'a> {
         }
         let description = description.and_then(|value| non_empty(&value).map(|v| v.to_string()));
 
+        if let Some(ref value) = name {
+            self.ensure_unique_name_in_context(club_id, value).await?;
+        }
+
         sqlx::query_as::<_, ClubRecord>(
             r#"
                 UPDATE clubs
@@ -326,6 +330,45 @@ impl<'a> ClubService<'a> {
         .map_err(|err| AppError::Database(err.to_string()))?
         .map(|record| record.into())
         .ok_or_else(|| AppError::NotFound("未找到指定社团".into()))
+    }
+
+    async fn ensure_unique_name_in_context(
+        &self,
+        club_id: Uuid,
+        candidate_name: &str,
+    ) -> Result<(), AppError> {
+        let current_name = sqlx::query_scalar::<_, String>(
+            r#"
+                SELECT name
+                FROM clubs
+                WHERE id = $1
+            "#,
+        )
+        .bind(club_id)
+        .fetch_optional(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?
+        .ok_or_else(|| AppError::NotFound("未找到指定社团".into()))?;
+
+        if current_name == candidate_name {
+            return Ok(());
+        }
+
+        let target_slots = load_club_slots(self.pool, club_id).await?;
+        if target_slots.is_empty() {
+            return Ok(());
+        }
+
+        let other_slots = load_slots_for_name(self.pool, club_id, candidate_name).await?;
+        if other_slots.is_empty() {
+            return Ok(());
+        }
+
+        if target_slots.iter().any(|slot| other_slots.contains(slot)) {
+            Err(AppError::Validation("已经存在相同社团".into()))
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn delete(&self, club_id: Uuid) -> Result<(), AppError> {
@@ -698,6 +741,136 @@ fn map_status(value: &str) -> EnrollmentStatus {
         "TRANSFERRED_IN" => EnrollmentStatus::TransferredIn,
         _ => EnrollmentStatus::Pending,
     }
+}
+
+type SlotKey = (Uuid, Uuid, i16);
+
+async fn load_club_slots(pool: &DbPool, club_id: Uuid) -> Result<HashSet<SlotKey>, AppError> {
+    let mut slots = HashSet::new();
+
+    let enrollment_rows = sqlx::query(
+        r#"
+            SELECT DISTINCT term_id, campus_id, requested_weekday
+            FROM enrollments
+            WHERE club_id = $1
+              AND status IN (PENDING,ACTIVE)
+        "#,
+    )
+    .bind(club_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    for row in enrollment_rows {
+        let term_id: Uuid = row
+            .try_get("term_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let campus_id: Uuid = row
+            .try_get("campus_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let weekday: Option<i16> = row
+            .try_get("requested_weekday")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        if let Some(day) = weekday {
+            slots.insert((term_id, campus_id, day));
+        }
+    }
+
+    let class_rows = sqlx::query(
+        r#"
+            SELECT DISTINCT term_id, campus_id, weekday
+            FROM classes
+            WHERE club_id = $1
+        "#,
+    )
+    .bind(club_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    for row in class_rows {
+        let term_id: Uuid = row
+            .try_get("term_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let campus_id: Uuid = row
+            .try_get("campus_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let weekday: i16 = row
+            .try_get("weekday")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        slots.insert((term_id, campus_id, weekday));
+    }
+
+    Ok(slots)
+}
+
+async fn load_slots_for_name(
+    pool: &DbPool,
+    exclude_id: Uuid,
+    candidate_name: &str,
+) -> Result<HashSet<SlotKey>, AppError> {
+    let mut slots = HashSet::new();
+
+    let enrollment_rows = sqlx::query(
+        r#"
+            SELECT DISTINCT e.term_id, e.campus_id, e.requested_weekday
+            FROM enrollments e
+            INNER JOIN clubs c ON c.id = e.club_id
+            WHERE e.status IN (PENDING,ACTIVE)
+              AND c.id <> $1
+              AND LOWER(c.name) = LOWER($2)
+        "#,
+    )
+    .bind(exclude_id)
+    .bind(candidate_name)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    for row in enrollment_rows {
+        let term_id: Uuid = row
+            .try_get("term_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let campus_id: Uuid = row
+            .try_get("campus_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let weekday: Option<i16> = row
+            .try_get("requested_weekday")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        if let Some(day) = weekday {
+            slots.insert((term_id, campus_id, day));
+        }
+    }
+
+    let class_rows = sqlx::query(
+        r#"
+            SELECT DISTINCT cls.term_id, cls.campus_id, cls.weekday
+            FROM classes cls
+            INNER JOIN clubs c ON c.id = cls.club_id
+            WHERE cls.club_id <> $1
+              AND LOWER(c.name) = LOWER($2)
+        "#,
+    )
+    .bind(exclude_id)
+    .bind(candidate_name)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    for row in class_rows {
+        let term_id: Uuid = row
+            .try_get("term_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let campus_id: Uuid = row
+            .try_get("campus_id")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        let weekday: i16 = row
+            .try_get("weekday")
+            .map_err(|err| AppError::Database(err.to_string()))?;
+        slots.insert((term_id, campus_id, weekday));
+    }
+
+    Ok(slots)
 }
 
 fn validate_weekdays(entries: &[MembershipEntry]) -> Result<(), AppError> {

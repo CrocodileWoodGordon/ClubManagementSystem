@@ -86,7 +86,7 @@
 | --- | --- | --- | --- |
 | `id` | uuid | PK | |
 | `code` | text | UNIQUE NOT NULL | “robotics” |
-| `name` | text | UNIQUE NOT NULL | |
+| `name` | text | NOT NULL | 允许跨校区/星期重名，冲突由业务校验 |
 | `description` | text | | |
 | `material_fee` | numeric(10,2) | NOT NULL | 默认材料费 |
 | `price_per_session` | numeric(10,2) | NOT NULL | 默认课时费 |

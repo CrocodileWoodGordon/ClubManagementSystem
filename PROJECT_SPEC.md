@@ -114,7 +114,7 @@
 #### `clubs` (社团定义表)
 
 * `id`: UUID
-* `name`: String (e.g., "机器人")
+* `name`: String (e.g., "机器人"，允许不同校区/星期重名，由服务层基于校区+星期冲突校验)
 * `material_fee`: Decimal (材料费，不退不免)
 * `price_per_lesson`: Decimal (单节课时费)
 

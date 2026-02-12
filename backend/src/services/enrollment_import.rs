@@ -430,20 +430,36 @@ impl ClubIndex {
             ));
         }
 
-        let club_row = sqlx::query(
+        let existing_club = sqlx::query(
             r#"
-                INSERT INTO clubs (code, name)
-                VALUES ($1,$2)
-                ON CONFLICT (name)
-                DO UPDATE SET name = EXCLUDED.name
-                RETURNING id, name, code
+                SELECT id, name, code
+                FROM clubs
+                WHERE LOWER(name) = LOWER($1)
+                ORDER BY created_at ASC
+                LIMIT 1
             "#,
         )
-        .bind(generate_club_code(trimmed))
         .bind(trimmed)
-        .fetch_one(tx.as_mut())
+        .fetch_optional(tx.as_mut())
         .await
         .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let club_row = if let Some(row) = existing_club {
+            row
+        } else {
+            sqlx::query(
+                r#"
+                    INSERT INTO clubs (code, name)
+                    VALUES ($1,$2)
+                    RETURNING id, name, code
+                "#,
+            )
+            .bind(generate_club_code(trimmed))
+            .bind(trimmed)
+            .fetch_one(tx.as_mut())
+            .await
+            .map_err(|err| AppError::Database(err.to_string()))?
+        };
 
         let club_id: Uuid = club_row
             .try_get("id")

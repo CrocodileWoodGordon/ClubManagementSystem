@@ -90,6 +90,7 @@
 - 2026-02-12：实现考勤 API（`GET /api/attendance/template/{id}`、`POST /api/attendance/import`、`GET /api/attendance`），串联班级排课、Roster、Excel 解析与 `attendance_records` 写入，响应包含模板数据与导入插入/更新统计。
 - 2026-02-12：完成前端考勤工作台，新增 `attendanceService.ts`、`/app/(admin)/attendance` 页面与 `loading.tsx`，支持筛班级、下载模板、导入 Excel 并查看历史记录，已通过 `npm run lint` / `npm run dev` 验证。
 - 2026-02-12：复核考勤页面交互与下载逻辑，修复 CSV 转义/依赖数组等细节，新增 `AttendanceServiceError` 包装并重跑 `npm run lint`、`npm run dev` 确认通过。
+- 2026-02-12：放宽社团名称唯一约束，允许跨校区/星期同名，`PUT /api/clubs/{id}` 在检测到同校区同星期重名时返回“已经存在相同社团”。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -110,3 +111,4 @@
 - `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 将社团按校区+星期拆分展示（并支持列表级别的校区/星期筛选），同时负责创建/编辑社团及管理成员，成员选择依赖 `studentRosterService` 提供的班级/学生数据。
 - `/api/attendance/template/{class_id}` 返回 Excel 模板（含所有学生行）及 `class_meeting_id` 列表；`POST /api/attendance/import` 需随 Multipart 上传 `class_meeting_id`，以 Excel 中的“班级-姓名”匹配报名记录并写入 `attendance_records`；`GET /api/attendance` 可按班级/课次查询导入结果供前端展示。
 - `AttendanceService` 暴露模板生成/导入/幂等计划方法，结合 `AttendanceImportOptions`（recorded_by、占位符、忽略名单）可直接生产 `AttendanceImportBatch` + `AttendancePersistPlan`，API 或任务只需持久化 `plan.inserts/updates` 即可。
+- `/api/clubs/{id}` 更新时允许跨校区/星期同名；当检测到同名且拥有相同校区+星期占位时返回 “已经存在相同社团”。
