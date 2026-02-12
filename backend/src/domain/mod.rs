@@ -3,6 +3,7 @@ pub mod billing;
 pub mod class_instance;
 pub mod club;
 pub mod enrollment;
+pub mod enrollment_status;
 pub mod student;
 
 pub use attendance::{
@@ -15,5 +16,14 @@ pub use club::Club;
 pub use enrollment::{
     Enrollment, EnrollmentDraft, EnrollmentImportOutcome, EnrollmentImportStatus, EnrollmentStatus,
     MaterialFeeState,
+};
+pub use enrollment_status::{
+    DropRuleContext,
+    DropRuleDecision,
+    EnrollmentStatusError,
+    EnrollmentTransition,
+    MaterialFeeDecision,
+    TransferKind,
+    evaluate_material_fee_transition,
 };
 pub use student::StudentProfile;
