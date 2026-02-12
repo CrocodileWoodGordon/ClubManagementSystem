@@ -160,10 +160,6 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
         }
     }, [weekdayOptions, selectedWeekday]);
 
-    useEffect(() => {
-        resetWorkspaceState();
-    }, [selectedCampus, selectedClub, selectedWeekday, resetWorkspaceState]);
-
     const resetWorkspaceState = useCallback(() => {
         setClasses([]);
         setClassError(null);
@@ -177,6 +173,10 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
         setUploadError(null);
         setUploadResult(null);
     }, []);
+
+    useEffect(() => {
+        resetWorkspaceState();
+    }, [selectedCampus, selectedClub, selectedWeekday, resetWorkspaceState]);
 
     useEffect(() => {
         if (classes.length === 0) {
