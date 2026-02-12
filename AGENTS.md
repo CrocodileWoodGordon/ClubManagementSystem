@@ -85,6 +85,7 @@
 - 2026-02-11：修复学期激活流程：后端 `POST /api/admin/terms/{id}/activate` 先统一取消其他激活学期后再设定目标学期，前端 `TermSettingsPanel` 创建/保存并设为当前后立即在列表中反映最新的唯一激活状态。
 - 2026-02-11：报名导入结果新增 `EnrollmentImportOutcome.id` 唯一标识，并在导入服务中兜底处理 `ux_enrollments_active` 冲突；前端 `EnrollmentImportPanel` 使用该 id 作为 React key，重复上传同一文件仅标记为“已跳过”且不再出现重复 key 报错。
 - 2026-02-11：`EnrollmentImportPanel` 新增“Excel 列映射”设置，可在上传前启用自定义学生列与周一~周五社团列，并通过 `config` 字段传至 `/api/import/enrollments`，兼容非标准模板。
+- 2026-02-12：落地考勤领域模型（`backend/src/domain/attendance.rs`），覆盖考勤状态、课次键、记录与导入批次结构，提供 SQLx/Excel DTO 的 `TryFrom` 与校验 helper，并以 `cargo test domain::attendance` 验证。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -103,3 +104,4 @@
 - `frontend/services/termService.ts` 对接 `/api/admin/terms` 的创建/更新/删除/激活接口，供 `/app/(admin)/settings/terms` 中的 `TermSettingsPanel` 使用以维护学期与当前学期状态。
 - `GET /api/clubs` 默认读取当前激活学期（若无激活学期需显式传 `term_id`），响应附带 `placements[]`：来源于该学期报名的“校区 + requested_weekday”组合，供前端将同名社团拆分为不同校区/星期条目。
 - `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 将社团按校区+星期拆分展示（并支持列表级别的校区/星期筛选），同时负责创建/编辑社团及管理成员，成员选择依赖 `studentRosterService` 提供的班级/学生数据。
+- `/api/attendance/bulk` 接收 `class_meeting_id/enrollment_id/status/minutes_attended/recorded_by`，直接映射新的 `AttendanceRecord` 模型，前端如需调用需准备班级课次与 enrollment 映射。

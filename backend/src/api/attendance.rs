@@ -1,5 +1,5 @@
 use axum::{Json, Router, extract::Path, http::StatusCode, routing::post};
-use chrono::NaiveDate;
+use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -14,10 +14,11 @@ pub struct AttendancePayload {
 
 #[derive(Debug, Deserialize)]
 pub struct AttendanceRow {
-    pub student_id: Uuid,
-    pub class_id: Uuid,
-    pub date: NaiveDate,
+    pub class_meeting_id: Uuid,
+    pub enrollment_id: Uuid,
     pub status: String,
+    pub minutes_attended: Option<i32>,
+    pub recorded_by: Option<String>,
 }
 
 async fn bulk_upload(Json(payload): Json<AttendancePayload>) -> StatusCode {
@@ -27,14 +28,12 @@ async fn bulk_upload(Json(payload): Json<AttendancePayload>) -> StatusCode {
         .into_iter()
         .map(|row| AttendanceRecord {
             id: Uuid::new_v4(),
-            student_id: row.student_id,
-            class_id: row.class_id,
-            date: row.date,
-            status: match row.status.to_uppercase().as_str() {
-                "ABSENT" => AttendanceStatus::Absent,
-                "EXCUSED" => AttendanceStatus::Excused,
-                _ => AttendanceStatus::Present,
-            },
+            class_meeting_id: row.class_meeting_id,
+            enrollment_id: row.enrollment_id,
+            status: AttendanceStatus::try_from(row.status.as_str()).unwrap_or(AttendanceStatus::Present),
+            minutes_attended: row.minutes_attended,
+            recorded_by: row.recorded_by,
+            recorded_at: Utc::now(),
         })
         .collect();
     let _ = service.record_bulk(records).await;

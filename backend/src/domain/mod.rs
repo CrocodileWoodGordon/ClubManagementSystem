@@ -5,7 +5,10 @@ pub mod club;
 pub mod enrollment;
 pub mod student;
 
-pub use attendance::{AttendanceRecord, AttendanceStatus};
+pub use attendance::{
+    AttendanceExcelRow, AttendanceImportBatch, AttendanceImportRow, AttendanceRecord,
+    AttendanceResult, AttendanceSessionKey, AttendanceStatus, AttendanceValidationError,
+};
 pub use billing::FeeBreakdown;
 pub use class_instance::{ClassInstance, ClassStatus};
 pub use club::Club;
