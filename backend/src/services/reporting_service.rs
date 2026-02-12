@@ -1,18 +1,31 @@
-use crate::domain::FeeBreakdown;
-use crate::error::AppError;
-use crate::services::billing_service::BillingService;
+use uuid::Uuid;
 
-#[derive(Debug, Default)]
-pub struct ReportingService;
+use crate::{
+    db::DbPool, domain::FeeBreakdown, error::AppError, services::billing_service::BillingService,
+};
 
-impl ReportingService {
-    pub fn new() -> Self {
-        Self::default()
+#[derive(Debug)]
+pub struct ReportingService<'a> {
+    pool: &'a DbPool,
+}
+
+impl<'a> ReportingService<'a> {
+    pub fn new(pool: &'a DbPool) -> Self {
+        Self { pool }
     }
 
-    pub async fn preview_settlement(&self) -> Result<Vec<FeeBreakdown>, AppError> {
-        let billing = BillingService::new();
-        // Delegates to billing layer; future versions will join attendance + enrollment info.
-        billing.preview_by_class(uuid::Uuid::nil()).await
+    pub async fn preview_settlement(&self, class_id: Uuid) -> Result<Vec<FeeBreakdown>, AppError> {
+        BillingService::new(self.pool)
+            .preview_by_class(class_id)
+            .await
+    }
+
+    pub async fn preview_student_bill(
+        &self,
+        student_id: Uuid,
+    ) -> Result<Vec<FeeBreakdown>, AppError> {
+        BillingService::new(self.pool)
+            .preview_by_student(student_id)
+            .await
     }
 }

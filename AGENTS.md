@@ -96,6 +96,7 @@
 - 2026-02-12：实现 `backend/src/services/enrollment_status.rs`，封装退课、同社团换班与跨社团转课逻辑，落地材料费沿用/重置与 `tuition_grace_applied` 判定，写入 `enrollment_status_history`，并在 `services/mod.rs` 暴露入口；已运行 `cargo test services::enrollment_status`（当前尚无调用方，编译存在 dead_code warning，待 API 接入消除）。
 - 2026-02-12：建模结算领域（`backend/src/domain/billing.rs`），补充 `BillingRun/BillingItem`、课时费与材料费计算输入/结果结构、教师子女折扣策略与校验 helper，并为 `billing_items.policy_snapshot` 预设字段，同时新增对应单元测试。
 - 2026-02-12：新增换课/退课 API（`backend/src/api/enrollment_status.rs`），提供 `POST /api/enrollment-status/drop|/move|/transfer`，调用 `EnrollmentStatusService` 完成退课、同社团换班与跨社团转课，并在 `api/mod.rs` 注册。
+- 2026-02-12：实现结算预览服务（`BillingService`），依赖考勤/报名数据生成班级与学生维度的 `FeeBreakdown`，并打通 `ReportingService` 与 `/api/reports/settlement|billing` 接口返回实时费用明细（经 `cargo check` 验证通过）。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
