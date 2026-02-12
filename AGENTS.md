@@ -93,6 +93,7 @@
 - 2026-02-12：放宽社团名称唯一约束，允许跨校区/星期同名，`PUT /api/clubs/{id}` 在检测到同校区同星期重名时返回“已经存在相同社团”。
 - 2026-02-12：学生名册支持教师子女 Excel 导入流程，`POST /api/students/teacher-children/import` 可自定义“班级/姓名”或“班级+姓名”列并批量更新 `students.is_teacher_child`；前端 `StudentRosterDashboard` 新增导入面板及 `TeacherChildImportPanel` 组件。
 - 2026-02-12：新增 `backend/src/domain/enrollment_status.rs`，定义报名状态机、材料费继承策略与“三节课免课”退课判定；在 `domain::mod` 中统一 re-export，并通过 `cargo test domain::enrollment_status` 验证核心逻辑。
+- 2026-02-12：实现 `backend/src/services/enrollment_status.rs`，封装退课、同社团换班与跨社团转课逻辑，落地材料费沿用/重置与 `tuition_grace_applied` 判定，写入 `enrollment_status_history`，并在 `services/mod.rs` 暴露入口；已运行 `cargo test services::enrollment_status`（当前尚无调用方，编译存在 dead_code warning，待 API 接入消除）。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

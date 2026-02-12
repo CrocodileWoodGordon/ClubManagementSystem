@@ -164,31 +164,36 @@ mod tests {
 
     #[test]
     fn allow_basic_transitions() {
-        assert!(EnrollmentTransition::new(EnrollmentStatus::Pending, EnrollmentStatus::Active)
-            .validate()
-            .is_ok());
-        assert!(EnrollmentTransition::new(EnrollmentStatus::Active, EnrollmentStatus::TransferredOut)
-            .validate()
-            .is_ok());
-        assert!(EnrollmentTransition::new(EnrollmentStatus::TransferredIn, EnrollmentStatus::Active)
-            .validate()
-            .is_ok());
+        assert!(
+            EnrollmentTransition::new(EnrollmentStatus::Pending, EnrollmentStatus::Active)
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            EnrollmentTransition::new(EnrollmentStatus::Active, EnrollmentStatus::TransferredOut)
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            EnrollmentTransition::new(EnrollmentStatus::TransferredIn, EnrollmentStatus::Active)
+                .validate()
+                .is_ok()
+        );
     }
 
     #[test]
     fn reject_illegal_transitions() {
-        let err = EnrollmentTransition::new(EnrollmentStatus::TransferredOut, EnrollmentStatus::Active)
-            .validate()
-            .unwrap_err();
+        let err =
+            EnrollmentTransition::new(EnrollmentStatus::TransferredOut, EnrollmentStatus::Active)
+                .validate()
+                .unwrap_err();
         assert!(err.message().contains("不允许"));
     }
 
     #[test]
     fn reuse_material_fee_for_same_club() {
-        let decision = evaluate_material_fee_transition(
-            MaterialFeeState::Charged,
-            TransferKind::SameClub,
-        );
+        let decision =
+            evaluate_material_fee_transition(MaterialFeeState::Charged, TransferKind::SameClub);
         assert!(decision.carry_over_previous_payment);
         assert_eq!(decision.new_enrollment_state, MaterialFeeState::Charged);
         assert!(!decision.requires_new_charge());
@@ -196,10 +201,8 @@ mod tests {
 
     #[test]
     fn reset_material_fee_for_cross_club() {
-        let decision = evaluate_material_fee_transition(
-            MaterialFeeState::Charged,
-            TransferKind::CrossClub,
-        );
+        let decision =
+            evaluate_material_fee_transition(MaterialFeeState::Charged, TransferKind::CrossClub);
         assert!(!decision.carry_over_previous_payment);
         assert_eq!(decision.new_enrollment_state, MaterialFeeState::Unset);
         assert!(decision.requires_new_charge());

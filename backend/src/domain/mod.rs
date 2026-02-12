@@ -18,12 +18,7 @@ pub use enrollment::{
     MaterialFeeState,
 };
 pub use enrollment_status::{
-    DropRuleContext,
-    DropRuleDecision,
-    EnrollmentStatusError,
-    EnrollmentTransition,
-    MaterialFeeDecision,
-    TransferKind,
-    evaluate_material_fee_transition,
+    DropRuleContext, DropRuleDecision, EnrollmentStatusError, EnrollmentTransition,
+    MaterialFeeDecision, TransferKind, evaluate_material_fee_transition,
 };
 pub use student::StudentProfile;

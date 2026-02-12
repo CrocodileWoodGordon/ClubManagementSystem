@@ -4,6 +4,7 @@ pub mod class_assignment_service;
 pub mod club_service;
 pub mod enrollment_import;
 pub mod enrollment_service;
+pub mod enrollment_status;
 pub mod excel_import_service;
 pub mod import_placeholder_service;
 pub mod reporting_service;
@@ -21,6 +22,10 @@ pub use enrollment_import::{EnrollmentImportColumns, EnrollmentImportService};
 pub use enrollment_service::{
     EnrollmentFilters, EnrollmentService, EnrollmentSlotFilters, EnrollmentSummaryFilters,
     EnrollmentSummaryRow, PendingEnrollmentDto,
+};
+pub use enrollment_status::{
+    ClubTransferInput, ClubTransferResult, DropEnrollmentInput, DropEnrollmentResult,
+    EnrollmentStatusService, MoveWithinClubInput, MoveWithinClubResult,
 };
 pub use excel_import_service::ExcelImportService;
 pub use import_placeholder_service::{
