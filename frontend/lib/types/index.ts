@@ -55,6 +55,21 @@ export interface StudentImportError {
     message: string;
 }
 
+export interface TeacherChildImportSummary {
+    totalRows: number;
+    matchedStudents: number;
+    updatedStudents: number;
+    alreadyMarked: number;
+    skippedRows: number;
+    duplicateRows: number;
+    errors: TeacherChildImportError[];
+}
+
+export interface TeacherChildImportError {
+    row: number;
+    message: string;
+}
+
 export type ClassStatus = "PLANNED" | "ACTIVE" | "ARCHIVED";
 
 export interface ClassInstance {

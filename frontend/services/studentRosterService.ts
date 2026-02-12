@@ -1,5 +1,11 @@
 import { ApiClient } from "@/lib/api/client";
-import type { HomeroomRoster, RosterStudent, StudentImportSummary } from "@/lib/types";
+import type {
+    ColumnReference,
+    HomeroomRoster,
+    RosterStudent,
+    StudentImportSummary,
+    TeacherChildImportSummary,
+} from "@/lib/types";
 
 const client = new ApiClient();
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -60,6 +66,22 @@ export interface CloneRosterInput {
 export interface CloneRosterSummary {
     copiedHomerooms: number;
     copiedStudents: number;
+}
+
+export type TeacherChildImportMode = "SPLIT" | "COMBINED";
+
+export interface TeacherChildImportConfig {
+    mode?: TeacherChildImportMode;
+    classColumn?: ColumnReference;
+    studentColumn?: ColumnReference;
+    combinedColumn?: ColumnReference;
+}
+
+export interface TeacherChildImportRequest {
+    termId: string;
+    campusId: string;
+    file: File;
+    config?: TeacherChildImportConfig;
 }
 
 export async function fetchHomerooms(
@@ -208,6 +230,30 @@ export async function importStudentExcel(file: File): Promise<StudentImportSumma
     });
 }
 
+export async function importTeacherChildrenExcel(
+    payload: TeacherChildImportRequest,
+): Promise<TeacherChildImportSummary> {
+    return safeRequest("导入教师子女名单失败", async () => {
+        if (!payload.termId || !payload.campusId) {
+            throw new StudentRosterServiceError("请先选择学期与校区");
+        }
+        const formData = new FormData();
+        formData.append("file", payload.file);
+        if (payload.config) {
+            formData.append("config", JSON.stringify(payload.config));
+        }
+        const query = buildQueryString({
+            term_id: payload.termId,
+            campus_id: payload.campusId,
+        });
+        const response = await uploadFormData<TeacherChildImportApiResponse>(
+            `/api/students/teacher-children/import${query}`,
+            formData,
+        );
+        return mapTeacherChildImportSummary(response.data);
+    });
+}
+
 async function safeRequest<T>(
     context: string,
     executor: () => Promise<T>,
@@ -313,6 +359,23 @@ function mapStudentImportSummary(payload: StudentImportSummaryApi): StudentImpor
     };
 }
 
+function mapTeacherChildImportSummary(
+    payload: TeacherChildImportSummaryApi,
+): TeacherChildImportSummary {
+    return {
+        totalRows: payload.total_rows,
+        matchedStudents: payload.matched_students,
+        updatedStudents: payload.updated_students,
+        alreadyMarked: payload.already_marked,
+        skippedRows: payload.skipped_rows,
+        duplicateRows: payload.duplicate_rows,
+        errors: payload.errors.map((item) => ({
+            row: item.row,
+            message: item.message,
+        })),
+    };
+}
+
 interface HomeroomListApiResponse {
     data: HomeroomApi[];
 }
@@ -371,6 +434,23 @@ interface StudentImportSummaryApi {
     total_rows: number;
     success_rows: number;
     skipped_rows: number;
+    errors: Array<{
+        row: number;
+        message: string;
+    }>;
+}
+
+interface TeacherChildImportApiResponse {
+    data: TeacherChildImportSummaryApi;
+}
+
+interface TeacherChildImportSummaryApi {
+    total_rows: number;
+    matched_students: number;
+    updated_students: number;
+    already_marked: number;
+    skipped_rows: number;
+    duplicate_rows: number;
     errors: Array<{
         row: number;
         message: string;

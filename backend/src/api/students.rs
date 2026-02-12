@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     routing::{get, post, put},
 };
 use serde::{Deserialize, Serialize};
@@ -12,8 +12,9 @@ use crate::{
     services::{
         CloneRosterRequest, CloneRosterResult, HomeroomListFilters, HomeroomRosterDto,
         HomeroomUpdateChanges, NewStudentInput, StudentRecordDto, StudentRosterService,
-        UpdateStudentChanges,
+        TeacherChildImportSummary, UpdateStudentChanges,
     },
+    utils::excel::ExcelWorkbook,
 };
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +67,12 @@ struct CloneRosterPayload {
     campus_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize)]
+struct TeacherChildImportQuery {
+    term_id: Option<Uuid>,
+    campus_id: Option<Uuid>,
+}
+
 #[derive(Debug, Serialize)]
 struct HomeroomListResponse {
     data: Vec<HomeroomRosterDto>,
@@ -91,6 +98,11 @@ struct CloneRosterResponse {
     data: CloneRosterResult,
 }
 
+#[derive(Debug, Serialize)]
+struct TeacherChildImportResponse {
+    data: TeacherChildImportSummary,
+}
+
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/homerooms", get(list_homerooms))
@@ -100,6 +112,7 @@ pub fn router() -> Router<ApiState> {
             "/homerooms/{id}/students",
             get(list_students).post(create_student),
         )
+        .route("/teacher-children/import", post(import_teacher_children))
         .route("/{id}", put(update_student).delete(delete_student))
 }
 
@@ -221,6 +234,80 @@ async fn clone_roster(
     };
     let data = service.clone_roster(request).await?;
     Ok(Json(CloneRosterResponse { data }))
+}
+
+async fn import_teacher_children(
+    State(state): State<ApiState>,
+    Query(query): Query<TeacherChildImportQuery>,
+    mut multipart: Multipart,
+) -> Result<Json<TeacherChildImportResponse>, AppError> {
+    let campus_id = query
+        .campus_id
+        .ok_or_else(|| AppError::Validation("请在查询参数中提供 campus_id".into()))?;
+    let upload = read_teacher_child_upload(&mut multipart).await?;
+    let workbook = ExcelWorkbook::from_bytes(upload.bytes, Some(&upload.filename))?;
+    let service = StudentRosterService::new(&state.pool);
+    let summary = service
+        .import_teacher_children(query.term_id, campus_id, workbook, upload.config.as_deref())
+        .await?;
+    Ok(Json(TeacherChildImportResponse { data: summary }))
+}
+
+struct TeacherChildUploadPayload {
+    bytes: Vec<u8>,
+    filename: String,
+    config: Option<String>,
+}
+
+async fn read_teacher_child_upload(
+    payload: &mut Multipart,
+) -> Result<TeacherChildUploadPayload, AppError> {
+    let mut bytes: Option<Vec<u8>> = None;
+    let mut filename: Option<String> = None;
+    let mut config: Option<String> = None;
+
+    while let Some(field) = payload
+        .next_field()
+        .await
+        .map_err(|err| AppError::Validation(format!("读取上传字段失败: {}", err)))?
+    {
+        match field.name() {
+            Some("config") => {
+                let text = field
+                    .text()
+                    .await
+                    .map_err(|err| AppError::Validation(format!("读取列配置失败: {}", err)))?;
+                if !text.trim().is_empty() {
+                    config = Some(text);
+                }
+            }
+            _ => {
+                let is_file = field.file_name().is_some()
+                    || field.name().map(|name| name == "file").unwrap_or(false);
+                if is_file {
+                    let resolved_name = field
+                        .file_name()
+                        .map(|name| name.to_string())
+                        .unwrap_or_else(|| "teacher_children.xlsx".into());
+                    let data = field.bytes().await.map_err(|err| {
+                        AppError::Validation(format!("读取 Excel 内容失败: {}", err))
+                    })?;
+                    bytes = Some(data.to_vec());
+                    filename = Some(resolved_name);
+                }
+            }
+        }
+    }
+
+    let bytes = bytes.ok_or_else(|| {
+        AppError::Validation("未找到 Excel 文件字段，请确认表单包含 `file`".into())
+    })?;
+
+    Ok(TeacherChildUploadPayload {
+        bytes,
+        filename: filename.unwrap_or_else(|| "teacher_children.xlsx".into()),
+        config,
+    })
 }
 
 fn sanitize_text(value: Option<String>) -> Option<String> {

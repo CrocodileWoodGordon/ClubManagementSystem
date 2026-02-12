@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::Datelike;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use uuid::Uuid;
 
-use crate::{db::DbPool, error::AppError};
+use crate::{db::DbPool, error::AppError, utils::excel::ExcelWorkbook};
 
 #[derive(Debug, Clone, Copy)]
 struct TermContext {
@@ -57,6 +57,23 @@ pub struct StudentRecordDto {
 pub struct CloneRosterResult {
     pub copied_homerooms: i64,
     pub copied_students: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TeacherChildImportSummary {
+    pub total_rows: i32,
+    pub matched_students: i32,
+    pub updated_students: i32,
+    pub already_marked: i32,
+    pub skipped_rows: i32,
+    pub duplicate_rows: i32,
+    pub errors: Vec<TeacherChildImportError>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TeacherChildImportError {
+    pub row: u32,
+    pub message: String,
 }
 
 #[derive(Debug, Default)]
@@ -548,6 +565,169 @@ impl<'a> StudentRosterService<'a> {
         })
     }
 
+    pub async fn import_teacher_children(
+        &self,
+        term_id: Option<Uuid>,
+        campus_id: Uuid,
+        workbook: ExcelWorkbook,
+        raw_config: Option<&str>,
+    ) -> Result<TeacherChildImportSummary, AppError> {
+        let term = self.resolve_term(term_id).await?;
+        self.ensure_campus_exists(campus_id).await?;
+        let columns = TeacherChildImportColumns::from_json(raw_config)?;
+        let parsed = parse_teacher_child_drafts(&workbook, &columns);
+        if parsed.drafts.is_empty() {
+            return Err(AppError::Validation(
+                "Excel 文件为空，未发现班级/学生数据".into(),
+            ));
+        }
+
+        let homeroom_rows = sqlx::query(
+            r#"
+                SELECT id, display_name
+                FROM homerooms
+                WHERE term_id = $1 AND campus_id = $2
+            "#,
+        )
+        .bind(term.id)
+        .bind(campus_id)
+        .fetch_all(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let mut homeroom_index = HashMap::new();
+        for row in homeroom_rows {
+            let id: Uuid = row
+                .try_get("id")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            let display_name: String = row
+                .try_get("display_name")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            homeroom_index.insert(normalize_label(&display_name), id);
+        }
+
+        let student_rows = sqlx::query(
+            r#"
+                SELECT s.id, s.homeroom_id, s.full_name, s.student_code, s.is_teacher_child
+                FROM students s
+                INNER JOIN homerooms h ON h.id = s.homeroom_id
+                WHERE h.term_id = $1 AND h.campus_id = $2 AND s.status = 'ACTIVE'
+            "#,
+        )
+        .bind(term.id)
+        .bind(campus_id)
+        .fetch_all(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        let mut students_by_name: HashMap<String, IndexedStudent> = HashMap::new();
+        let mut students_by_code: HashMap<String, IndexedStudent> = HashMap::new();
+        for row in student_rows {
+            let record = IndexedStudent {
+                id: row
+                    .try_get("id")
+                    .map_err(|err| AppError::Database(err.to_string()))?,
+                homeroom_id: row
+                    .try_get("homeroom_id")
+                    .map_err(|err| AppError::Database(err.to_string()))?,
+                is_teacher_child: row
+                    .try_get("is_teacher_child")
+                    .map_err(|err| AppError::Database(err.to_string()))?,
+            };
+            let full_name: String = row
+                .try_get("full_name")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            let name_key = student_name_key(record.homeroom_id, &full_name);
+            students_by_name.insert(name_key, record.clone());
+
+            let student_code: Option<String> = row
+                .try_get("student_code")
+                .map_err(|err| AppError::Database(err.to_string()))?;
+            if let Some(code) = student_code {
+                if !code.trim().is_empty() {
+                    let code_key = student_code_key(record.homeroom_id, &code);
+                    students_by_code.insert(code_key, record.clone());
+                }
+            }
+        }
+
+        let mut seen_students = HashSet::new();
+        let mut to_update = Vec::new();
+        let mut summary =
+            TeacherChildImportSummary::new(parsed.drafts.len() as i32, parsed.skipped_rows);
+
+        for draft in parsed.drafts {
+            if draft.class_name.trim().is_empty() {
+                summary.record_error(draft.row_number, "班级列为空，无法匹配学生");
+                continue;
+            }
+            if draft.student_name.trim().is_empty() {
+                summary.record_error(draft.row_number, "姓名列为空，无法匹配学生");
+                continue;
+            }
+
+            let Some(&homeroom_id) = homeroom_index.get(&normalize_label(&draft.class_name)) else {
+                summary.record_error(
+                    draft.row_number,
+                    format!(
+                        "未找到班级 `{}`，请确认名称与学生名册一致",
+                        draft.class_name
+                    ),
+                );
+                continue;
+            };
+
+            let student = draft
+                .student_code
+                .as_ref()
+                .and_then(|code| students_by_code.get(&student_code_key(homeroom_id, code)))
+                .or_else(|| {
+                    students_by_name.get(&student_name_key(homeroom_id, &draft.student_name))
+                });
+
+            let Some(student) = student else {
+                summary.record_error(
+                    draft.row_number,
+                    format!(
+                        "未找到学生 `{}`（班级：{}），请确认姓名/班级是否一致",
+                        draft.student_name, draft.class_name
+                    ),
+                );
+                continue;
+            };
+
+            summary.matched_students += 1;
+            if !seen_students.insert(student.id) {
+                summary.duplicate_rows += 1;
+                continue;
+            }
+
+            if student.is_teacher_child {
+                summary.already_marked += 1;
+            } else {
+                summary.updated_students += 1;
+                to_update.push(student.id);
+            }
+        }
+
+        if !to_update.is_empty() {
+            let mut builder =
+                QueryBuilder::new("UPDATE students SET is_teacher_child = true WHERE id IN (");
+            let mut separated = builder.separated(", ");
+            for id in &to_update {
+                separated.push_bind(id);
+            }
+            builder.push(") AND is_teacher_child = false");
+            builder
+                .build()
+                .execute(self.pool)
+                .await
+                .map_err(|err| AppError::Database(err.to_string()))?;
+        }
+
+        Ok(summary)
+    }
+
     async fn fetch_homeroom(
         &self,
         homeroom_id: Uuid,
@@ -610,6 +790,25 @@ impl<'a> StudentRosterService<'a> {
 
         if exists.is_none() {
             return Err(AppError::Validation("班级不属于该学期".into()));
+        }
+        Ok(())
+    }
+
+    async fn ensure_campus_exists(&self, campus_id: Uuid) -> Result<(), AppError> {
+        let exists: Option<i64> = sqlx::query_scalar(
+            r#"
+                SELECT 1::bigint
+                FROM campuses
+                WHERE id = $1
+            "#,
+        )
+        .bind(campus_id)
+        .fetch_optional(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        if exists.is_none() {
+            return Err(AppError::Validation("指定的校区不存在".into()));
         }
         Ok(())
     }
@@ -776,4 +975,330 @@ impl UpdateStudentChanges {
             || self.primary_guardian_phone.is_some()
             || self.status.is_some()
     }
+}
+
+#[derive(Clone)]
+struct IndexedStudent {
+    id: Uuid,
+    homeroom_id: Uuid,
+    is_teacher_child: bool,
+}
+
+#[derive(Debug)]
+struct TeacherChildDraft {
+    row_number: u32,
+    class_name: String,
+    student_name: String,
+    student_code: Option<String>,
+}
+
+#[derive(Debug)]
+struct ParsedTeacherChildDrafts {
+    drafts: Vec<TeacherChildDraft>,
+    skipped_rows: i32,
+}
+
+impl TeacherChildImportSummary {
+    fn new(total_rows: i32, skipped_rows: i32) -> Self {
+        Self {
+            total_rows,
+            matched_students: 0,
+            updated_students: 0,
+            already_marked: 0,
+            skipped_rows,
+            duplicate_rows: 0,
+            errors: Vec::new(),
+        }
+    }
+
+    fn record_error(&mut self, row: u32, message: impl Into<String>) {
+        self.errors.push(TeacherChildImportError {
+            row,
+            message: message.into(),
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TeacherChildImportColumns {
+    mode: TeacherChildColumnMode,
+}
+
+#[derive(Debug, Clone)]
+enum TeacherChildColumnMode {
+    Split {
+        class_column: usize,
+        student_column: usize,
+    },
+    Combined {
+        identifier_column: usize,
+    },
+}
+
+impl TeacherChildImportColumns {
+    fn from_json(raw: Option<&str>) -> Result<Self, AppError> {
+        let Some(text) = raw.filter(|value| !value.trim().is_empty()) else {
+            return Ok(Self::default_split());
+        };
+        let parsed: RawTeacherChildColumnConfig = serde_json::from_str(text)
+            .map_err(|err| AppError::Validation(format!("列配置 JSON 解析失败: {}", err)))?;
+        Self::from_raw(parsed)
+    }
+
+    fn from_raw(raw: RawTeacherChildColumnConfig) -> Result<Self, AppError> {
+        let normalized_mode = raw.mode.as_ref().map(|mode| mode.to_ascii_uppercase());
+        match normalized_mode.as_deref() {
+            Some("COMBINED") => Self::build_combined(raw.combined_column),
+            Some("SPLIT") | None => {
+                if normalized_mode.is_none()
+                    && raw.combined_column.is_some()
+                    && raw.class_column.is_none()
+                    && raw.student_column.is_none()
+                {
+                    Self::build_combined(raw.combined_column)
+                } else {
+                    Self::build_split(raw.class_column, raw.student_column)
+                }
+            }
+            Some(other) => Err(AppError::Validation(format!(
+                "列配置 mode `{}` 不支持，请使用 SPLIT 或 COMBINED",
+                other
+            ))),
+        }
+    }
+
+    fn default_split() -> Self {
+        let class_column = column_label_to_index("B").unwrap_or(1);
+        let student_column = column_label_to_index("C").unwrap_or(2);
+        Self {
+            mode: TeacherChildColumnMode::Split {
+                class_column,
+                student_column,
+            },
+        }
+    }
+
+    fn build_split(
+        class_ref: Option<ColumnRef>,
+        student_ref: Option<ColumnRef>,
+    ) -> Result<Self, AppError> {
+        let default_class = column_label_to_index("B").unwrap_or(1);
+        let default_student = column_label_to_index("C").unwrap_or(2);
+        let class_column = class_ref
+            .map(|column| column.to_index().map_err(|msg| AppError::Validation(msg)))
+            .transpose()?
+            .unwrap_or(default_class);
+        let student_column = student_ref
+            .map(|column| column.to_index().map_err(|msg| AppError::Validation(msg)))
+            .transpose()?
+            .unwrap_or(default_student);
+        Ok(Self {
+            mode: TeacherChildColumnMode::Split {
+                class_column,
+                student_column,
+            },
+        })
+    }
+
+    fn build_combined(column: Option<ColumnRef>) -> Result<Self, AppError> {
+        let fallback = ColumnRef::Letter("E".into());
+        let resolved = column.unwrap_or(fallback);
+        let index = resolved
+            .to_index()
+            .map_err(|msg| AppError::Validation(msg))?;
+        Ok(Self {
+            mode: TeacherChildColumnMode::Combined {
+                identifier_column: index,
+            },
+        })
+    }
+
+    fn mode(&self) -> &TeacherChildColumnMode {
+        &self.mode
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawTeacherChildColumnConfig {
+    mode: Option<String>,
+    class_column: Option<ColumnRef>,
+    student_column: Option<ColumnRef>,
+    combined_column: Option<ColumnRef>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum ColumnRef {
+    Letter(String),
+    Index(u32),
+}
+
+impl ColumnRef {
+    fn to_index(&self) -> Result<usize, String> {
+        match self {
+            ColumnRef::Letter(letter) => column_label_to_index(letter).ok_or_else(|| {
+                format!("无法解析列字母 `{}`，请使用 Excel 列名如 A、B...AA", letter)
+            }),
+            ColumnRef::Index(index) => {
+                if *index == 0 {
+                    Err("列序号必须从 1 开始".into())
+                } else {
+                    Ok((*index as usize) - 1)
+                }
+            }
+        }
+    }
+}
+
+fn parse_teacher_child_drafts(
+    workbook: &ExcelWorkbook,
+    columns: &TeacherChildImportColumns,
+) -> ParsedTeacherChildDrafts {
+    let sheet = workbook.primary_sheet();
+    if sheet.rows.len() <= 1 {
+        return ParsedTeacherChildDrafts {
+            drafts: Vec::new(),
+            skipped_rows: 0,
+        };
+    }
+
+    let mut drafts = Vec::new();
+    let mut skipped = 0;
+    for (row_index, row) in sheet.rows.iter().enumerate().skip(1) {
+        let row_number = (row_index + 1) as u32;
+        match columns.mode() {
+            TeacherChildColumnMode::Split {
+                class_column,
+                student_column,
+            } => {
+                let class_value = read_cell(row, *class_column);
+                let student_value = read_cell(row, *student_column);
+                if class_value.is_empty() && student_value.is_empty() {
+                    skipped += 1;
+                    continue;
+                }
+                let (student_code, cleaned_name) = extract_student_code(&student_value);
+                drafts.push(TeacherChildDraft {
+                    row_number,
+                    class_name: class_value,
+                    student_name: cleaned_name,
+                    student_code,
+                });
+            }
+            TeacherChildColumnMode::Combined { identifier_column } => {
+                let identifier = read_cell(row, *identifier_column);
+                if identifier.is_empty() {
+                    skipped += 1;
+                    continue;
+                }
+                let (student_code, remainder) = extract_student_code(&identifier);
+                let split = split_homeroom_and_name(&remainder);
+                let (class_value, student_value) = split
+                    .map(|(class_name, student_name)| (class_name, student_name))
+                    .unwrap_or_else(|| (String::new(), remainder.trim().to_string()));
+                drafts.push(TeacherChildDraft {
+                    row_number,
+                    class_name: class_value,
+                    student_name: student_value,
+                    student_code,
+                });
+            }
+        }
+    }
+
+    ParsedTeacherChildDrafts {
+        drafts,
+        skipped_rows: skipped,
+    }
+}
+
+fn read_cell(row: &[String], index: usize) -> String {
+    row.get(index)
+        .map(|value| value.trim().to_string())
+        .unwrap_or_default()
+}
+
+fn student_name_key(homeroom_id: Uuid, name: &str) -> String {
+    format!("{}::{}", homeroom_id, normalize_label(name))
+}
+
+fn student_code_key(homeroom_id: Uuid, code: &str) -> String {
+    format!("{}::{}", homeroom_id, normalize_code(code))
+}
+
+fn normalize_label(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+fn normalize_code(value: &str) -> String {
+    value.trim().to_uppercase()
+}
+
+fn column_label_to_index(label: &str) -> Option<usize> {
+    let mut result = 0usize;
+    for ch in label.chars() {
+        if !ch.is_ascii_alphabetic() {
+            return None;
+        }
+        let value = (ch.to_ascii_uppercase() as u8 - b'A' + 1) as usize;
+        result = result * 26 + value;
+    }
+    if result == 0 { None } else { Some(result - 1) }
+}
+
+fn extract_student_code(value: &str) -> (Option<String>, String) {
+    let trimmed = value.trim();
+    if let Some(rest) = trimmed.strip_prefix('[') {
+        if let Some(end) = rest.find(']') {
+            let code = rest[..end].trim();
+            let remainder = rest[end + 1..].trim().to_string();
+            if !code.is_empty() {
+                return (Some(code.to_string()), remainder);
+            }
+            return (None, remainder);
+        }
+    }
+    (None, trimmed.to_string())
+}
+
+fn split_homeroom_and_name(value: &str) -> Option<(String, String)> {
+    let separators = [' ', '　', '-', '－', '_', ':', '：', '/', '|'];
+    for sep in separators {
+        if let Some(idx) = value.rfind(sep) {
+            let (left, right) = value.split_at(idx);
+            let homeroom = left.trim();
+            let mut student = right.trim_start_matches(sep).trim();
+            if student.is_empty() {
+                student = right.trim();
+            }
+            if !homeroom.is_empty() && !student.is_empty() {
+                return Some((homeroom.to_string(), student.to_string()));
+            }
+        }
+    }
+
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut ascii_prefix = false;
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_ascii_alphanumeric() {
+            ascii_prefix = true;
+            continue;
+        }
+        if ascii_prefix {
+            let (left, right) = trimmed.split_at(idx);
+            let homeroom = left.trim();
+            let student = right.trim();
+            if !homeroom.is_empty() && !student.is_empty() {
+                return Some((homeroom.to_string(), student.to_string()));
+            }
+        }
+        break;
+    }
+
+    None
 }

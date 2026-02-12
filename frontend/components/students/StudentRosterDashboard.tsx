@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { SectionCard } from "@/components/common/SectionCard";
 import { StudentImportPanel } from "@/components/upload/StudentImportPanel";
+import { TeacherChildImportPanel } from "@/components/upload/TeacherChildImportPanel";
 
 import {
     CampusOption,
@@ -35,6 +36,17 @@ export function StudentRosterDashboard({
                 description="上传“校区/班级/姓名” Excel，一次性建立学生与班级关联。"
             >
                 <StudentImportPanel onCompleted={handleImportCompleted} />
+            </SectionCard>
+            <SectionCard
+                title="教师子女批量标记"
+                description="按学期、校区导入 Excel，将名单中的学生批量标记为教师子女。"
+            >
+                <TeacherChildImportPanel
+                    terms={terms}
+                    campuses={campuses}
+                    defaultTermId={defaultTermId}
+                    onCompleted={handleImportCompleted}
+                />
             </SectionCard>
             <SectionCard
                 title="学生名册工作台"

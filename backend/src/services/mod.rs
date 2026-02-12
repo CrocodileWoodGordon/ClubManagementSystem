@@ -31,5 +31,5 @@ pub use student_import::{StudentImportService, StudentImportSummary};
 pub use student_roster_service::{
     CloneRosterRequest, CloneRosterResult, HomeroomListFilters, HomeroomRosterDto,
     HomeroomUpdateChanges, NewStudentInput, StudentRecordDto, StudentRosterService,
-    UpdateStudentChanges,
+    TeacherChildImportSummary, UpdateStudentChanges,
 };
