@@ -91,6 +91,7 @@
 - 2026-02-12：完成前端考勤工作台，新增 `attendanceService.ts`、`/app/(admin)/attendance` 页面与 `loading.tsx`，支持筛班级、下载模板、导入 Excel 并查看历史记录，已通过 `npm run lint` / `npm run dev` 验证。
 - 2026-02-12：复核考勤页面交互与下载逻辑，修复 CSV 转义/依赖数组等细节，新增 `AttendanceServiceError` 包装并重跑 `npm run lint`、`npm run dev` 确认通过。
 - 2026-02-12：放宽社团名称唯一约束，允许跨校区/星期同名，`PUT /api/clubs/{id}` 在检测到同校区同星期重名时返回“已经存在相同社团”。
+- 2026-02-12：学生名册支持教师子女 Excel 导入流程，`POST /api/students/teacher-children/import` 可自定义“班级/姓名”或“班级+姓名”列并批量更新 `students.is_teacher_child`；前端 `StudentRosterDashboard` 新增导入面板及 `TeacherChildImportPanel` 组件。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -106,6 +107,7 @@
 - 前端 `ClassAssignmentBoard`（`/app/(admin)/class-assignment`）复用报名汇总的筛选条件，调用 `fetchEnrollmentSummary` + `fetchEnrollmentSlotDetails` + `classAssignmentService`，提供单选/多选分班，并支持创建/编辑班级；`BulkAssignmentForm` 组件接收 `classes` 列表进行批量分配。
 - `/app/(admin)/settings/placeholders` 使用 `importPlaceholderService` 调用 `/api/import/placeholders`，支持管理员在前端增删改占位字符串。
 - `frontend/services/studentRosterService.ts` 调用 `/api/students/homerooms`、`/api/students/{id}` 等接口，提供班级列表、班主任信息更新、学生增删改与学期间复用；`/app/(admin)/students` 页面通过 `StudentRosterDashboard` 组合 Excel 导入与名册工作台。
+- `/api/students/teacher-children/import` 需随查询参数传入 `term_id` + `campus_id`，Multipart 内包含 `file` 与可选 `config` JSON（`mode`=`SPLIT|COMBINED`，配置 `classColumn/studentColumn/combinedColumn`）；前端 `TeacherChildImportPanel` 通过 `studentRosterService.importTeacherChildrenExcel` 上传 Excel 并展示导入结果。
 - `frontend/services/termService.ts` 对接 `/api/admin/terms` 的创建/更新/删除/激活接口，供 `/app/(admin)/settings/terms` 中的 `TermSettingsPanel` 使用以维护学期与当前学期状态。
 - `GET /api/clubs` 默认读取当前激活学期（若无激活学期需显式传 `term_id`），响应附带 `placements[]`：来源于该学期报名的“校区 + requested_weekday”组合，供前端将同名社团拆分为不同校区/星期条目。
 - `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 将社团按校区+星期拆分展示（并支持列表级别的校区/星期筛选），同时负责创建/编辑社团及管理成员，成员选择依赖 `studentRosterService` 提供的班级/学生数据。
