@@ -753,7 +753,7 @@ async fn load_club_slots(pool: &DbPool, club_id: Uuid) -> Result<HashSet<SlotKey
             SELECT DISTINCT term_id, campus_id, requested_weekday
             FROM enrollments
             WHERE club_id = $1
-              AND status IN (PENDING,ACTIVE)
+              AND status IN ('PENDING','ACTIVE')
         "#,
     )
     .bind(club_id)
@@ -816,7 +816,7 @@ async fn load_slots_for_name(
             SELECT DISTINCT e.term_id, e.campus_id, e.requested_weekday
             FROM enrollments e
             INNER JOIN clubs c ON c.id = e.club_id
-            WHERE e.status IN (PENDING,ACTIVE)
+            WHERE e.status IN ('PENDING','ACTIVE')
               AND c.id <> $1
               AND LOWER(c.name) = LOWER($2)
         "#,
