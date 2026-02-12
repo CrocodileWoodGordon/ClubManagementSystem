@@ -102,7 +102,9 @@ async fn drop_enrollment(
         drop_date: parse_optional_date("drop_date", &payload.drop_date)?,
     };
     let result = service.drop_enrollment(&input).await?;
-    Ok(Json(DropEnrollmentResponse { data: result.into() }))
+    Ok(Json(DropEnrollmentResponse {
+        data: result.into(),
+    }))
 }
 
 async fn move_enrollment(
@@ -116,7 +118,9 @@ async fn move_enrollment(
         changed_by: payload.changed_by,
     };
     let result = service.move_within_club(&input).await?;
-    Ok(Json(MoveEnrollmentResponse { data: result.into() }))
+    Ok(Json(MoveEnrollmentResponse {
+        data: result.into(),
+    }))
 }
 
 async fn transfer_enrollment(
@@ -134,7 +138,9 @@ async fn transfer_enrollment(
         drop_date: parse_optional_date("drop_date", &payload.drop_date)?,
     };
     let result = service.transfer_to_club(&input).await?;
-    Ok(Json(TransferEnrollmentResponse { data: result.into() }))
+    Ok(Json(TransferEnrollmentResponse {
+        data: result.into(),
+    }))
 }
 
 impl From<DropEnrollmentResult> for DropEnrollmentDto {
@@ -175,10 +181,7 @@ impl From<ClubTransferResult> for TransferEnrollmentDto {
     }
 }
 
-fn parse_optional_date(
-    field: &str,
-    raw: &Option<String>,
-) -> Result<Option<NaiveDate>, AppError> {
+fn parse_optional_date(field: &str, raw: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
     match raw {
         Some(value) => Ok(Some(parse_date(field, value)?)),
         None => Ok(None),

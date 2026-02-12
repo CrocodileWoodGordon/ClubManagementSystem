@@ -94,6 +94,7 @@
 - 2026-02-12：学生名册支持教师子女 Excel 导入流程，`POST /api/students/teacher-children/import` 可自定义“班级/姓名”或“班级+姓名”列并批量更新 `students.is_teacher_child`；前端 `StudentRosterDashboard` 新增导入面板及 `TeacherChildImportPanel` 组件。
 - 2026-02-12：新增 `backend/src/domain/enrollment_status.rs`，定义报名状态机、材料费继承策略与“三节课免课”退课判定；在 `domain::mod` 中统一 re-export，并通过 `cargo test domain::enrollment_status` 验证核心逻辑。
 - 2026-02-12：实现 `backend/src/services/enrollment_status.rs`，封装退课、同社团换班与跨社团转课逻辑，落地材料费沿用/重置与 `tuition_grace_applied` 判定，写入 `enrollment_status_history`，并在 `services/mod.rs` 暴露入口；已运行 `cargo test services::enrollment_status`（当前尚无调用方，编译存在 dead_code warning，待 API 接入消除）。
+- 2026-02-12：建模结算领域（`backend/src/domain/billing.rs`），补充 `BillingRun/BillingItem`、课时费与材料费计算输入/结果结构、教师子女折扣策略与校验 helper，并为 `billing_items.policy_snapshot` 预设字段，同时新增对应单元测试。
 - 2026-02-12：新增换课/退课 API（`backend/src/api/enrollment_status.rs`），提供 `POST /api/enrollment-status/drop|/move|/transfer`，调用 `EnrollmentStatusService` 完成退课、同社团换班与跨社团转课，并在 `api/mod.rs` 注册。
 
 ## 跨文件接口备忘
@@ -117,4 +118,5 @@
 - `/api/attendance/template/{class_id}` 返回 Excel 模板（含所有学生行）及 `class_meeting_id` 列表；`POST /api/attendance/import` 需随 Multipart 上传 `class_meeting_id`，以 Excel 中的“班级-姓名”匹配报名记录并写入 `attendance_records`；`GET /api/attendance` 可按班级/课次查询导入结果供前端展示。
 - `AttendanceService` 暴露模板生成/导入/幂等计划方法，结合 `AttendanceImportOptions`（recorded_by、占位符、忽略名单）可直接生产 `AttendanceImportBatch` + `AttendancePersistPlan`，API 或任务只需持久化 `plan.inserts/updates` 即可。
 - `/api/clubs/{id}` 更新时允许跨校区/星期同名；当检测到同名且拥有相同校区+星期占位时返回 “已经存在相同社团”。
+- `domain::billing` 暴露 `calculate_tuition_charge`、`evaluate_material_charge`、`TeacherDiscountPolicy` 等 helper，服务层生成结算项时可直接产出 `BillingPolicySnapshot` 与 `BillingItem`。
 - `/api/enrollment-status/drop|move|transfer` 通过 `EnrollmentStatusService` 实现退课、同社团换班与跨社团转入；前端触发需传入 `changed_by`、必要的班级/社团信息与可选 `drop_date`（`YYYY-MM-DD`）。
