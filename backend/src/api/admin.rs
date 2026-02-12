@@ -264,12 +264,11 @@ async fn activate_term(
         .await
         .map_err(|err| AppError::Database(err.to_string()))?;
 
-    let exists =
-        sqlx::query_scalar::<_, Uuid>("SELECT id FROM terms WHERE id = $1 FOR UPDATE")
-            .bind(term_id)
-            .fetch_optional(tx.as_mut())
-            .await
-            .map_err(|err| AppError::Database(err.to_string()))?;
+    let exists = sqlx::query_scalar::<_, Uuid>("SELECT id FROM terms WHERE id = $1 FOR UPDATE")
+        .bind(term_id)
+        .fetch_optional(tx.as_mut())
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
 
     if exists.is_none() {
         return Err(AppError::NotFound("未找到对应学期".into()));

@@ -90,9 +90,11 @@ impl TryFrom<&str> for AttendanceStatus {
     type Error = AttendanceValidationError;
 
     fn try_from(value: &str) -> AttendanceResult<Self> {
-        AttendanceStatus::parse_label(value).ok_or_else(|| AttendanceValidationError::InvalidStatus {
-            row: None,
-            raw: value.trim().to_string(),
+        AttendanceStatus::parse_label(value).ok_or_else(|| {
+            AttendanceValidationError::InvalidStatus {
+                row: None,
+                raw: value.trim().to_string(),
+            }
         })
     }
 }
@@ -106,7 +108,11 @@ pub struct AttendanceSessionKey {
 }
 
 impl AttendanceSessionKey {
-    pub fn new(class_id: Uuid, meeting_date: NaiveDate, session_number: u16) -> AttendanceResult<Self> {
+    pub fn new(
+        class_id: Uuid,
+        meeting_date: NaiveDate,
+        session_number: u16,
+    ) -> AttendanceResult<Self> {
         if session_number == 0 {
             return Err(AttendanceValidationError::InvalidSessionNumber { value: 0 });
         }
@@ -282,10 +288,13 @@ fn parse_minutes(raw: Option<String>, row: u32) -> AttendanceResult<Option<i32>>
             if trimmed.is_empty() {
                 return Ok(None);
             }
-            let parsed: i32 = trimmed.parse().map_err(|_| AttendanceValidationError::InvalidMinutes {
-                row,
-                raw: trimmed.to_string(),
-            })?;
+            let parsed: i32 =
+                trimmed
+                    .parse()
+                    .map_err(|_| AttendanceValidationError::InvalidMinutes {
+                        row,
+                        raw: trimmed.to_string(),
+                    })?;
             if parsed < 0 {
                 return Err(AttendanceValidationError::InvalidMinutes {
                     row,
@@ -306,9 +315,18 @@ mod tests {
 
     #[test]
     fn status_parsing_accepts_aliases() {
-        assert_eq!(AttendanceStatus::try_from("present").unwrap(), AttendanceStatus::Present);
-        assert_eq!(AttendanceStatus::try_from("缺勤").unwrap(), AttendanceStatus::Absent);
-        assert_eq!(AttendanceStatus::from_excel("请假", 5).unwrap(), AttendanceStatus::Leave);
+        assert_eq!(
+            AttendanceStatus::try_from("present").unwrap(),
+            AttendanceStatus::Present
+        );
+        assert_eq!(
+            AttendanceStatus::try_from("缺勤").unwrap(),
+            AttendanceStatus::Absent
+        );
+        assert_eq!(
+            AttendanceStatus::from_excel("请假", 5).unwrap(),
+            AttendanceStatus::Leave
+        );
     }
 
     #[test]
@@ -377,6 +395,9 @@ mod tests {
             note: None,
         };
 
-        assert!(AttendanceImportBatch::new(session, meeting_id, Some("Bob".into()), vec![row], None).is_ok());
+        assert!(
+            AttendanceImportBatch::new(session, meeting_id, Some("Bob".into()), vec![row], None)
+                .is_ok()
+        );
     }
 }

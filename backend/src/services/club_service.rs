@@ -147,10 +147,7 @@ impl From<ClubRecord> for ClubDto {
 }
 
 fn decimal_to_f64(value: BigDecimal) -> f64 {
-    value
-        .to_string()
-        .parse::<f64>()
-        .unwrap_or(0.0)
+    value.to_string().parse::<f64>().unwrap_or(0.0)
 }
 
 impl<'a> ClubService<'a> {

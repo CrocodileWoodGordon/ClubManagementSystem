@@ -168,7 +168,12 @@ impl AttendanceService {
     pub fn build_roster_lookup(entries: &[AttendanceRosterEntry]) -> HashMap<String, Uuid> {
         entries
             .iter()
-            .map(|entry| (normalize_key(&entry.student_identifier), entry.enrollment_id))
+            .map(|entry| {
+                (
+                    normalize_key(&entry.student_identifier),
+                    entry.enrollment_id,
+                )
+            })
             .collect()
     }
 
@@ -377,7 +382,9 @@ mod tests {
                 ],
             ],
         };
-        let workbook = ExcelWorkbook { sheets: vec![sheet] };
+        let workbook = ExcelWorkbook {
+            sheets: vec![sheet],
+        };
         let session = AttendanceSessionKey::new(
             fake_class().id,
             NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
@@ -441,14 +448,9 @@ mod tests {
                 note: None,
             },
         ];
-        let batch = AttendanceImportBatch::new(
-            session,
-            class_meeting_id,
-            Some("Bob".into()),
-            rows,
-            None,
-        )
-        .unwrap();
+        let batch =
+            AttendanceImportBatch::new(session, class_meeting_id, Some("Bob".into()), rows, None)
+                .unwrap();
 
         let plan = service.plan_persistence(&batch, &history);
         assert_eq!(plan.updates.len(), 1);
