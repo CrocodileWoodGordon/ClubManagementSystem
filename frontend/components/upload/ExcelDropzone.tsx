@@ -28,7 +28,7 @@ export function ExcelDropzone({ onFileSelected, disabled = false }: ExcelDropzon
                 }}
             />
             <span className="text-sm font-medium">
-                {disabled ? "处理中..." : "拖拽或点击上传问卷星 Excel"}
+                {disabled ? "处理中..." : "拖拽或点击上传 Excel"}
             </span>
             <span className="text-xs text-slate-400">支持 .xlsx / .xls</span>
         </label>
