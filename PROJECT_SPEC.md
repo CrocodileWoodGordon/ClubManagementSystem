@@ -228,7 +228,9 @@
 
 ### 5.3 考勤与报表 API
 
-* `POST /api/attendance/bulk`: 批量上传考勤数据。
+* `GET /api/attendance/template/{class_id}`：根据班级与排课生成 Excel 模板（JSON 形式返回），并附带 `class_meeting_id` 列表供导入时选择具体课次。
+* `POST /api/attendance/import`：Multipart 上传考勤 Excel，同时提供 `class_meeting_id`/`recorded_by?`/`ignored_identifiers?` 字段，后端解析后按学生 identifier（班级+姓名）匹配 enrollment 并对 `attendance_records` 做插入或更新。
+* `GET /api/attendance?class_id=&class_meeting_id?=`：查询指定班级的考勤历史，可按课次过滤，返回学生信息、状态、分钟数与记录时间。
 * `GET /api/reports/settlement`: 获取最终结算单。
 * Output: JSON 结构，前端渲染为表格并支持导出 Excel。
 

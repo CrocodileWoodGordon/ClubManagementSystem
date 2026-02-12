@@ -87,6 +87,7 @@
 - 2026-02-11：`EnrollmentImportPanel` 新增“Excel 列映射”设置，可在上传前启用自定义学生列与周一~周五社团列，并通过 `config` 字段传至 `/api/import/enrollments`，兼容非标准模板。
 - 2026-02-12：落地考勤领域模型（`backend/src/domain/attendance.rs`），覆盖考勤状态、课次键、记录与导入批次结构，提供 SQLx/Excel DTO 的 `TryFrom` 与校验 helper，并以 `cargo test domain::attendance` 验证。
 - 2026-02-12：新增考勤服务（`backend/src/services/attendance.rs`），实现模板生成、Excel 导入解析与幂等写库计划；`cargo test services::attendance` 用于验证模板行数、占位符过滤与插入/更新策略。
+- 2026-02-12：实现考勤 API（`GET /api/attendance/template/{id}`、`POST /api/attendance/import`、`GET /api/attendance`），串联班级排课、Roster、Excel 解析与 `attendance_records` 写入，响应包含模板数据与导入插入/更新统计。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
@@ -105,5 +106,5 @@
 - `frontend/services/termService.ts` 对接 `/api/admin/terms` 的创建/更新/删除/激活接口，供 `/app/(admin)/settings/terms` 中的 `TermSettingsPanel` 使用以维护学期与当前学期状态。
 - `GET /api/clubs` 默认读取当前激活学期（若无激活学期需显式传 `term_id`），响应附带 `placements[]`：来源于该学期报名的“校区 + requested_weekday”组合，供前端将同名社团拆分为不同校区/星期条目。
 - `frontend/services/clubService.ts` 对接 `/api/clubs`、`/api/clubs/{id}/members` 等接口，`/app/(admin)/enrollments/clubs` 页面通过 `ClubManagementWorkspace` 将社团按校区+星期拆分展示（并支持列表级别的校区/星期筛选），同时负责创建/编辑社团及管理成员，成员选择依赖 `studentRosterService` 提供的班级/学生数据。
-- `/api/attendance/bulk` 接收 `class_meeting_id/enrollment_id/status/minutes_attended/recorded_by`，直接映射新的 `AttendanceRecord` 模型，前端如需调用需准备班级课次与 enrollment 映射。
+- `/api/attendance/template/{class_id}` 返回 Excel 模板（含所有学生行）及 `class_meeting_id` 列表；`POST /api/attendance/import` 需随 Multipart 上传 `class_meeting_id`，以 Excel 中的“班级-姓名”匹配报名记录并写入 `attendance_records`；`GET /api/attendance` 可按班级/课次查询导入结果供前端展示。
 - `AttendanceService` 暴露模板生成/导入/幂等计划方法，结合 `AttendanceImportOptions`（recorded_by、占位符、忽略名单）可直接生产 `AttendanceImportBatch` + `AttendancePersistPlan`，API 或任务只需持久化 `plan.inserts/updates` 即可。

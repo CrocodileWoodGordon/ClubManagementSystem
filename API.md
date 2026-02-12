@@ -65,8 +65,13 @@
 - `POST /api/students/homerooms/clone`  
   请求体 `{ source_term_id, target_term_id, campus_id? }`，将来源学期的班级及学生复制到目标学期，若目标学期已有数据则返回校验错误。
 
-## 7. 考勤与报表占位接口
-- `POST /api/attendance/bulk`、`POST /api/attendance/template/{class_id}`：考勤上传/模板生成占位。
+## 7. 考勤与报表接口
+- `GET /api/attendance/template/{class_id}`  
+  读取指定班级的排课与 roster，返回 JSON 形式的 Excel 模板（包含表头与所有行），同时附带 `class_meeting_id` 列表供后续导入选择。
+- `POST /api/attendance/import`  
+  Multipart 上传 Excel（字段名 `file`），并附带 `class_meeting_id`、`recorded_by?`、`ignored_identifiers?`。后端会解析 Excel、匹配报名记录并将差异写入 `attendance_records`，响应包含 `inserted/updated/skipped` 数量。
+- `GET /api/attendance?class_id=&class_meeting_id?=`  
+  列出指定班级（可进一步按课次过滤）的历史考勤记录，返回学生姓名、identifier、状态、分钟数与记录人。
 - `GET /api/reports/settlement`、`GET /api/reports/billing`：费用/账单报表占位。
 
 ## 8. 社团管理
