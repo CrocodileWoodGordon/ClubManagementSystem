@@ -18,6 +18,54 @@ const TEMPLATE_HEADER_ROW_INDEX: usize = 3;
 const TEMPLATE_INSTRUCTION_TEXT: &str = "将考勤情况为缺席的同学对应单元格删除（设为空），考勤情况正常的同学无需更改。如果课时过多，直接将后面多余课时所有同学的对应单元格删除（设置为空）即可。机器读取，请不要擅自改动文件其余部分。如有成员增减，请重新获取最新的考勤表。";
 const TEMPLATE_DEFAULT_STATUS: &str = "正常";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttendanceWeekWindow {
+    start_week: u16,
+    end_week: u16,
+}
+
+impl AttendanceWeekWindow {
+    pub fn new(start_week: u16, end_week: u16) -> Result<Self, AppError> {
+        if start_week == 0 || end_week == 0 {
+            return Err(AppError::Validation("周次必须从 1 开始".into()));
+        }
+        if start_week > end_week {
+            return Err(AppError::Validation("起始周不能大于结束周".into()));
+        }
+        if end_week > TEMPLATE_WEEK_COLUMNS as u16 {
+            return Err(AppError::Validation(format!(
+                "结束周超出模板最大范围 (1-{})",
+                TEMPLATE_WEEK_COLUMNS
+            )));
+        }
+        Ok(Self {
+            start_week,
+            end_week,
+        })
+    }
+
+    pub fn from_optional(start_week: Option<u16>, end_week: Option<u16>) -> Result<Self, AppError> {
+        let default_start = 1;
+        let default_end = TEMPLATE_WEEK_COLUMNS as u16;
+        let start = start_week.unwrap_or(default_start);
+        let end = end_week.unwrap_or(default_end);
+        Self::new(start, end)
+    }
+
+    pub fn includes(&self, week_number: u16) -> bool {
+        week_number >= self.start_week && week_number <= self.end_week
+    }
+}
+
+impl Default for AttendanceWeekWindow {
+    fn default() -> Self {
+        Self {
+            start_week: 1,
+            end_week: TEMPLATE_WEEK_COLUMNS as u16,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct AttendanceService;
 
@@ -33,6 +81,7 @@ impl AttendanceService {
         _session_dates: &[NaiveDate],
         roster: &[StudentProfile],
         context: AttendanceTemplateContext,
+        week_window: AttendanceWeekWindow,
     ) -> AttendanceTemplate {
         let sheet_name = format!("{}-{}", class.class_code, class.weekday);
         let club_name = context.club_or_default();
@@ -42,10 +91,10 @@ impl AttendanceService {
         rows.push(build_title_row(&class.class_code));
         rows.push(build_meta_row(&club_name, &campus_name, class));
         rows.push(build_instruction_row());
-        rows.push(build_header_row());
+        rows.push(build_header_row(&week_window));
 
         for (index, student) in roster.iter().enumerate() {
-            rows.push(build_student_row(index, student));
+            rows.push(build_student_row(index, student, &week_window));
         }
 
         AttendanceTemplate {
@@ -312,22 +361,34 @@ fn build_instruction_row() -> Vec<String> {
     row
 }
 
-fn build_header_row() -> Vec<String> {
+fn build_header_row(week_window: &AttendanceWeekWindow) -> Vec<String> {
     let mut row = Vec::with_capacity(TEMPLATE_TOTAL_COLUMNS);
     row.push("编号".into());
     row.push("学生UID".into());
     for week in 1..=TEMPLATE_WEEK_COLUMNS {
-        row.push(format!("第{}周", week));
+        if week_window.includes(week as u16) {
+            row.push(format!("第{}周", week));
+        } else {
+            row.push(String::new());
+        }
     }
     row
 }
 
-fn build_student_row(index: usize, student: &StudentProfile) -> Vec<String> {
+fn build_student_row(
+    index: usize,
+    student: &StudentProfile,
+    week_window: &AttendanceWeekWindow,
+) -> Vec<String> {
     let mut row = Vec::with_capacity(TEMPLATE_TOTAL_COLUMNS);
     row.push((index + 1).to_string());
     row.push(format!("{}-{}", student.original_class, student.name));
-    for _ in 0..TEMPLATE_WEEK_COLUMNS {
-        row.push(TEMPLATE_DEFAULT_STATUS.to_string());
+    for week in 1..=TEMPLATE_WEEK_COLUMNS {
+        if week_window.includes(week as u16) {
+            row.push(TEMPLATE_DEFAULT_STATUS.to_string());
+        } else {
+            row.push(String::new());
+        }
     }
     row
 }
@@ -467,7 +528,8 @@ mod tests {
         ];
         let context = AttendanceTemplateContext::new("机器人社", "主校区");
 
-        let template = service.generate_template(&class, &dates, &roster, context);
+        let week_window = AttendanceWeekWindow::default();
+        let template = service.generate_template(&class, &dates, &roster, context, week_window);
         assert_eq!(template.rows().len(), roster.len() + 4);
         assert_eq!(template.headers().len(), TEMPLATE_TOTAL_COLUMNS);
         let first_student_row = TEMPLATE_HEADER_ROW_INDEX + 1;
@@ -477,6 +539,39 @@ mod tests {
         );
         assert_eq!(template.worksheet.merged_cells.len(), 5);
         assert_eq!(template.headers()[2], "第1周");
+    }
+
+    #[test]
+    fn template_respects_custom_week_window() {
+        let service = AttendanceService::new();
+        let class = fake_class();
+        let roster = fake_roster();
+        let dates = vec![NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()];
+        let context = AttendanceTemplateContext::new("机器人社", "主校区");
+
+        let week_window = AttendanceWeekWindow::new(3, 6).expect("week range valid");
+        let template = service.generate_template(&class, &dates, &roster, context, week_window);
+
+        let headers = template.headers();
+        assert_eq!(headers[TEMPLATE_FIRST_WEEK_COLUMN_INDEX], "");
+        assert_eq!(headers[TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 1], "");
+        assert_eq!(headers[TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 2], "第3周");
+        assert_eq!(headers[TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 5], "第6周");
+        assert_eq!(headers[TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 6], "");
+
+        let first_student_row = TEMPLATE_HEADER_ROW_INDEX + 1;
+        assert_eq!(
+            template.rows()[first_student_row][TEMPLATE_FIRST_WEEK_COLUMN_INDEX],
+            ""
+        );
+        assert_eq!(
+            template.rows()[first_student_row][TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 2],
+            TEMPLATE_DEFAULT_STATUS
+        );
+        assert_eq!(
+            template.rows()[first_student_row][TEMPLATE_FIRST_WEEK_COLUMN_INDEX + 6],
+            ""
+        );
     }
 
     #[test]
@@ -492,8 +587,9 @@ mod tests {
         let roster = fake_roster();
         let dates = vec![NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()];
         let context = AttendanceTemplateContext::new("机器人社", "主校区");
+        let week_window = AttendanceWeekWindow::default();
         let mut worksheet = service
-            .generate_template(&class, &dates, &roster, context)
+            .generate_template(&class, &dates, &roster, context, week_window)
             .worksheet;
 
         let first_student_row = TEMPLATE_HEADER_ROW_INDEX + 1;

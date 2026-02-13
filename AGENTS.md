@@ -100,6 +100,7 @@
 - 2026-02-12：新增报表批处理任务（`backend/src/tasks/reporting.rs`），按学期触发 `billing_runs` 记录，批量将 `FeeBreakdown` 写入 `billing_items` 并导出包含班级/学生费用拆解的 CSV，运行完成后自动更新状态与摘要说明。
 - 2026-02-12：前端费用结算页面上线（`/app/(admin)/billing`），可按校区/社团/星期筛选班级，实时调用 `reportingService.fetchClassSettlement` 预览课时费/材料费/优惠并导出 CSV，页面自带 loading 骨架与指标卡。
 - 2026-02-13：报表导出新增整班 Excel 能力，后端提供 `GET /api/reports/billing/homeroom` 汇总班级全部学生费用并由前端一键导出，学生下拉支持“全部”选项触发整班导出。
+- 2026-02-13：考勤模板导出支持 `start_week`/`end_week` 查询参数，`AttendanceService::generate_template` 依据周次窗口仅填充指定周列，其余列留空，新增单元测试并执行 `cargo test services::attendance` 验证。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

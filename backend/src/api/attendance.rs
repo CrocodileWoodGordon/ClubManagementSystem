@@ -18,7 +18,7 @@ use crate::{
     error::AppError,
     services::attendance::{
         AttendanceHistory, AttendanceImportOptions, AttendancePersistPlan, AttendanceRosterEntry,
-        AttendanceService, AttendanceTemplateContext,
+        AttendanceService, AttendanceTemplateContext, AttendanceWeekWindow,
     },
     utils::excel::{ExcelWorkbook, Worksheet, encode_xlsx, sanitize_file_name},
 };
@@ -31,6 +31,13 @@ const XLSX_MIME_TYPE: &str = "application/vnd.openxmlformats-officedocument.spre
 pub struct AttendanceQuery {
     pub class_id: Uuid,
     pub class_meeting_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct AttendanceTemplateQuery {
+    pub start_week: Option<u16>,
+    pub end_week: Option<u16>,
 }
 
 #[derive(Debug, Serialize)]
@@ -127,6 +134,7 @@ async fn list_attendance(
 async fn download_template(
     State(state): State<ApiState>,
     Path(class_id): Path<Uuid>,
+    Query(range): Query<AttendanceTemplateQuery>,
 ) -> Result<Json<AttendanceTemplateResponse>, AppError> {
     let class = fetch_class(&state, class_id).await?;
     let meetings = ensure_class_meetings(&state, &class).await?;
@@ -155,9 +163,15 @@ async fn download_template(
         .collect();
 
     let template_context = fetch_template_context(&state, &class).await?;
+    let week_window = AttendanceWeekWindow::from_optional(range.start_week, range.end_week)?;
     let service = AttendanceService::new();
-    let template =
-        service.generate_template(&class, &session_dates, &roster_profiles, template_context);
+    let template = service.generate_template(
+        &class,
+        &session_dates,
+        &roster_profiles,
+        template_context,
+        week_window,
+    );
 
     let meetings_dto = meetings
         .iter()
