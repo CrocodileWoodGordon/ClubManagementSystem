@@ -264,3 +264,28 @@ export interface FeeBreakdown {
     waiveReason?: TuitionWaiverReason;
     remarks?: string;
 }
+
+
+export type StudentBillingItem = FeeBreakdown & {
+    clubId: string;
+    clubName: string;
+    classCode?: string;
+};
+
+export interface StudentBillingBundle {
+    studentId: string;
+    studentName: string;
+    studentCode?: string;
+    rows: StudentBillingItem[];
+}
+
+export interface HomeroomBillingInfo {
+    id: string;
+    displayName: string;
+    campusName: string;
+}
+
+export interface HomeroomBillingReport {
+    homeroom: HomeroomBillingInfo;
+    students: StudentBillingBundle[];
+}

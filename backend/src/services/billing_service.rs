@@ -18,6 +18,14 @@ pub struct BillingService<'a> {
     pool: &'a DbPool,
 }
 
+#[derive(Debug, Clone)]
+pub struct FeeBreakdownDetail {
+    pub breakdown: FeeBreakdown,
+    pub club_id: Uuid,
+    pub club_name: String,
+    pub class_code: Option<String>,
+}
+
 impl<'a> BillingService<'a> {
     pub fn new(pool: &'a DbPool) -> Self {
         Self { pool }
@@ -31,6 +39,9 @@ impl<'a> BillingService<'a> {
                 SELECT e.id AS enrollment_id,
                        e.student_id,
                        COALESCE(e.class_id, $1) AS resolved_class_id,
+                       e.club_id,
+                       c.name AS club_name,
+                       cls.class_code,
                        e.status,
                        e.status_reason,
                        e.material_fee_state,
@@ -43,6 +54,7 @@ impl<'a> BillingService<'a> {
                 FROM enrollments e
                 INNER JOIN students s ON s.id = e.student_id
                 INNER JOIN clubs c ON c.id = e.club_id
+                LEFT JOIN classes cls ON cls.id = COALESCE(e.class_id, $1)
                 LEFT JOIN club_terms ct
                        ON ct.term_id = e.term_id
                       AND ct.campus_id = e.campus_id
@@ -85,6 +97,9 @@ impl<'a> BillingService<'a> {
                 SELECT e.id AS enrollment_id,
                        e.student_id,
                        COALESCE(e.class_id, fallback.class_id) AS resolved_class_id,
+                       e.club_id,
+                       c.name AS club_name,
+                       cls.class_code,
                        e.status,
                        e.status_reason,
                        e.material_fee_state,
@@ -97,6 +112,7 @@ impl<'a> BillingService<'a> {
                 FROM enrollments e
                 INNER JOIN students s ON s.id = e.student_id
                 INNER JOIN clubs c ON c.id = e.club_id
+                LEFT JOIN classes cls ON cls.id = COALESCE(e.class_id, fallback.class_id)
                 LEFT JOIN club_terms ct
                        ON ct.term_id = e.term_id
                       AND ct.campus_id = e.campus_id
@@ -130,6 +146,83 @@ impl<'a> BillingService<'a> {
         .map_err(|err| AppError::Database(err.to_string()))?;
 
         rows.into_iter().map(build_breakdown).collect()
+    }
+
+    pub async fn preview_by_students_bulk(
+        &self,
+        student_ids: Vec<Uuid>,
+        term_id: Uuid,
+    ) -> Result<Vec<FeeBreakdownDetail>, AppError> {
+        if student_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rows = sqlx::query_as::<_, BillingSourceRow>(
+            r#"
+                SELECT e.id AS enrollment_id,
+                       e.student_id,
+                       COALESCE(e.class_id, fallback.class_id) AS resolved_class_id,
+                       e.club_id,
+                       c.name AS club_name,
+                       cls.class_code,
+                       e.status,
+                       e.status_reason,
+                       e.material_fee_state,
+                       e.tuition_grace_applied,
+                       s.is_teacher_child,
+                       c.grace_sessions,
+                       COALESCE(ct.price_per_session, c.price_per_session) AS price_per_session,
+                       COALESCE(ct.material_fee, c.material_fee) AS material_fee,
+                       COALESCE(att.present_count, 0)::bigint AS attendance_count
+                FROM enrollments e
+                INNER JOIN students s ON s.id = e.student_id
+                INNER JOIN clubs c ON c.id = e.club_id
+                LEFT JOIN club_terms ct
+                       ON ct.term_id = e.term_id
+                      AND ct.campus_id = e.campus_id
+                      AND ct.club_id = e.club_id
+                LEFT JOIN (
+                    SELECT ar.enrollment_id,
+                           COUNT(*) FILTER (WHERE ar.status = 'PRESENT')::bigint AS present_count
+                    FROM attendance_records ar
+                    GROUP BY ar.enrollment_id
+                ) att ON att.enrollment_id = e.id
+                LEFT JOIN LATERAL (
+                    SELECT cm.class_id
+                    FROM attendance_records ar
+                    INNER JOIN class_meetings cm ON cm.id = ar.class_meeting_id
+                    WHERE ar.enrollment_id = e.id
+                    GROUP BY cm.class_id
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 1
+                ) fallback ON true
+                LEFT JOIN classes cls ON cls.id = COALESCE(e.class_id, fallback.class_id)
+                WHERE e.student_id = ANY($1::uuid[])
+                  AND e.term_id = $2
+                  AND e.status IN ('ACTIVE','DROPPED','TRANSFERRED_OUT','TRANSFERRED_IN')
+                  AND COALESCE(e.class_id, fallback.class_id) IS NOT NULL
+                ORDER BY s.full_name ASC, e.created_at ASC
+            "#,
+        )
+        .bind(&student_ids)
+        .bind(term_id)
+        .fetch_all(self.pool)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let club_id = row.club_id;
+                let club_name = row.club_name.clone();
+                let class_code = row.class_code.clone();
+                build_breakdown(row).map(|breakdown| FeeBreakdownDetail {
+                    breakdown,
+                    club_id,
+                    club_name,
+                    class_code,
+                })
+            })
+            .collect()
     }
 
     async fn fetch_class_context(&self, class_id: Uuid) -> Result<ClassContext, AppError> {
@@ -176,6 +269,9 @@ struct BillingSourceRow {
     enrollment_id: Uuid,
     student_id: Uuid,
     resolved_class_id: Uuid,
+    club_id: Uuid,
+    club_name: String,
+    class_code: Option<String>,
     status: String,
     status_reason: Option<String>,
     material_fee_state: String,

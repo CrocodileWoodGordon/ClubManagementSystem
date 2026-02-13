@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    api::ApiState, domain::FeeBreakdown, error::AppError,
-    services::reporting_service::ReportingService,
+    api::ApiState,
+    domain::FeeBreakdown,
+    error::AppError,
+    services::reporting_service::{HomeroomBillingReport, ReportingService},
 };
 
 #[derive(Debug, Deserialize)]
@@ -19,6 +21,11 @@ pub struct SettlementQuery {
 #[derive(Debug, Deserialize)]
 pub struct BillingQuery {
     pub student_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HomeroomBillingQuery {
+    pub homeroom_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -50,9 +57,22 @@ async fn billing(
     Ok(Json(SettlementResponse { data }))
 }
 
+async fn homeroom_billing(
+    State(state): State<ApiState>,
+    Query(query): Query<HomeroomBillingQuery>,
+) -> Result<Json<HomeroomBillingReport>, AppError> {
+    let homeroom_id = query
+        .homeroom_id
+        .ok_or_else(|| AppError::Validation("请提供 homeroom_id".into()))?;
+    let service = ReportingService::new(&state.pool);
+    let data = service.preview_homeroom_bill(homeroom_id).await?;
+    Ok(Json(data))
+}
+
 /// Financial + roster reports for admins.
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/settlement", get(settlement))
         .route("/billing", get(billing))
+        .route("/billing/homeroom", get(homeroom_billing))
 }

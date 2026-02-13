@@ -11,8 +11,8 @@ import type {
     RosterStudent,
 } from "@/lib/types";
 import { formatCurrency, formatWaiverReason } from "@/lib/utils";
-import { exportCsv } from "@/lib/utils/export";
-import { fetchStudentBilling } from "@/services/reportingService";
+import { exportCsv, exportHomeroomBillingExcel } from "@/lib/utils/export";
+import { fetchHomeroomBilling, fetchStudentBilling } from "@/services/reportingService";
 import {
     fetchHomeroomStudents,
     fetchHomerooms,
@@ -22,6 +22,8 @@ interface Option {
     value: string;
     label: string;
 }
+
+const ALL_STUDENTS_VALUE = "__ALL__";
 
 export default function ReportsPage() {
     const [homerooms, setHomerooms] = useState<HomeroomRoster[]>([]);
@@ -131,9 +133,21 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
     const [studentsError, setStudentsError] = useState<string | null>(null);
 
     const [selectedStudentId, setSelectedStudentId] = useState("");
+    const isAllStudentsSelected = selectedStudentId === ALL_STUDENTS_VALUE;
     const [billingRows, setBillingRows] = useState<FeeBreakdown[]>([]);
     const [billingLoading, setBillingLoading] = useState(false);
     const [billingError, setBillingError] = useState<string | null>(null);
+
+    const studentOptions = useMemo(() => {
+        if (students.length === 0) {
+            return [] as Option[];
+        }
+        const mapped = students.map((student) => ({
+            value: student.id,
+            label: `${student.fullName}${student.studentCode ? `（${student.studentCode}）` : ""}`,
+        }));
+        return [{ value: ALL_STUDENTS_VALUE, label: "全部" }, ...mapped];
+    }, [students]);
 
     const [exporting, setExporting] = useState(false);
 
@@ -171,6 +185,9 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
                 return;
             }
             setSelectedStudentId((previous) => {
+                if (previous === ALL_STUDENTS_VALUE) {
+                    return previous;
+                }
                 if (previous && rows.some((student) => student.id === previous)) {
                     return previous;
                 }
@@ -224,10 +241,12 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
         [homerooms, selectedHomeroomId],
     );
 
-    const selectedStudent = useMemo(
-        () => students.find((student) => student.id === selectedStudentId),
-        [students, selectedStudentId],
-    );
+    const selectedStudent = useMemo(() => {
+        if (isAllStudentsSelected || !selectedStudentId) {
+            return undefined;
+        }
+        return students.find((student) => student.id === selectedStudentId);
+    }, [students, selectedStudentId, isAllStudentsSelected]);
 
     const totals = useMemo(() => {
         return billingRows.reduce(
@@ -242,6 +261,16 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
         );
     }, [billingRows]);
 
+    const canExportHomeroom =
+        isAllStudentsSelected && Boolean(selectedHomeroomId) && students.length > 0;
+    const canExportStudent = !isAllStudentsSelected && billingRows.length > 0;
+    const exportDisabled = exporting || (!canExportHomeroom && !canExportStudent);
+    const exportLabel = exporting
+        ? "生成中..."
+        : isAllStudentsSelected
+          ? "导出 Excel（整班）"
+          : "导出 CSV";
+
     useEffect(() => {
         if (!selectedHomeroomId) {
             return;
@@ -250,11 +279,11 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
     }, [selectedHomeroomId, loadStudents]);
 
     useEffect(() => {
-        if (!selectedStudentId) {
+        if (!selectedStudentId || isAllStudentsSelected) {
             return;
         }
         loadBilling();
-    }, [selectedStudentId, loadBilling]);
+    }, [selectedStudentId, isAllStudentsSelected, loadBilling]);
 
     const handleCampusChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const campusId = event.target.value;
@@ -277,11 +306,10 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
         resetBillingState();
     };
 
-    const handleExport = () => {
-        if (billingRows.length === 0) {
+    const handleExportSingle = () => {
+        if (billingRows.length === 0 || !selectedStudent) {
             return;
         }
-        setExporting(true);
         const header = [
             "班级ID",
             "出勤次数",
@@ -302,9 +330,50 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
             formatWaiverReason(row.waiveReason),
             row.remarks ?? "",
         ]);
-        const name = selectedStudent?.fullName ?? "student";
+        const name = selectedStudent.fullName || "student";
         exportCsv(header, csvRows, `billing_${name}.csv`);
-        setExporting(false);
+    };
+
+    const handleHomeroomExport = async () => {
+        if (!selectedHomeroomId) {
+            setBillingError("请选择班级");
+            return;
+        }
+        setExporting(true);
+        setBillingError(null);
+        try {
+            const report = await fetchHomeroomBilling(selectedHomeroomId);
+            if (report.students.length === 0) {
+                setBillingError("该班暂无学生账单记录，无法导出。");
+                return;
+            }
+            const dateLabel = new Date().toISOString().slice(0, 10);
+            const campus = report.homeroom.campusName || "campus";
+            const homeroomLabel = report.homeroom.displayName || "class";
+            const fileName = `${homeroomLabel}_${campus}_${dateLabel}.xls`;
+            exportHomeroomBillingExcel(report, fileName);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setBillingError(message);
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleExport = async () => {
+        if (isAllStudentsSelected) {
+            await handleHomeroomExport();
+            return;
+        }
+        if (billingRows.length === 0 || !selectedStudent) {
+            return;
+        }
+        setExporting(true);
+        try {
+            handleExportSingle();
+        } finally {
+            setExporting(false);
+        }
     };
 
     return (
@@ -329,10 +398,7 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
                 <FilterSelect
                     label="学生"
                     value={selectedStudentId}
-                    options={students.map((student) => ({
-                        value: student.id,
-                        label: `${student.fullName}${student.studentCode ? `（${student.studentCode}）` : ""}`,
-                    }))}
+                    options={studentOptions}
                     placeholder={
                         studentsLoading ? "学生加载中..." : "请选择学生"
                     }
@@ -353,7 +419,11 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
                 <p className="text-sm text-slate-500">正在计算账单...</p>
             ) : null}
 
-            {selectedStudent ? (
+            {isAllStudentsSelected ? (
+                <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    已选择导出整班账单，列表预览暂停显示。请直接点击下方“导出 Excel（整班）”按钮生成文件。
+                </div>
+            ) : selectedStudent ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                     <p>
                         当前学生：<span className="font-semibold text-slate-900">{selectedStudent.fullName}</span>
@@ -373,84 +443,98 @@ function ReportsWorkspace({ homerooms }: ReportsWorkspaceProps) {
             )}
 
             <div className="flex flex-wrap items-center gap-3">
-                <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <MetricCard label="课时费" value={formatCurrency(totals.lesson)} />
-                    <MetricCard label="材料费" value={formatCurrency(totals.material)} />
-                    <MetricCard label="课时费减免" value={formatCurrency(totals.discount)} />
-                    <MetricCard label="计费课次" value={totals.charged.toString()} />
-                </div>
+                {isAllStudentsSelected ? (
+                    <div className="flex-1 rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                        整班导出模式下不展示个人汇总。
+                    </div>
+                ) : (
+                    <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <MetricCard label="课时费" value={formatCurrency(totals.lesson)} />
+                        <MetricCard label="材料费" value={formatCurrency(totals.material)} />
+                        <MetricCard label="课时费减免" value={formatCurrency(totals.discount)} />
+                        <MetricCard label="计费课次" value={totals.charged.toString()} />
+                    </div>
+                )}
                 <button
                     type="button"
                     className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={handleExport}
-                    disabled={billingRows.length === 0 || exporting}
+                    onClick={() => {
+                        void handleExport();
+                    }}
+                    disabled={exportDisabled}
                 >
-                    {exporting ? "生成中..." : "导出 CSV"}
+                    {exportLabel}
                 </button>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-                {billingRows.length === 0 ? (
-                    <div className="p-6 text-sm text-slate-500">
-                        暂无账单行。
-                    </div>
-                ) : (
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-4 py-2 text-left font-medium text-slate-600">
-                                    班级 ID
-                                </th>
-                                <th className="px-4 py-2 text-left font-medium text-slate-600">
-                                    出勤/计费
-                                </th>
-                                <th className="px-4 py-2 text-right font-medium text-slate-600">
-                                    课时费
-                                </th>
-                                <th className="px-4 py-2 text-right font-medium text-slate-600">
-                                    材料费
-                                </th>
-                                <th className="px-4 py-2 text-right font-medium text-slate-600">
-                                    减免
-                                </th>
-                                <th className="px-4 py-2 text-left font-medium text-slate-600">
-                                    原因
-                                </th>
-                                <th className="px-4 py-2 text-left font-medium text-slate-600">
-                                    备注
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                            {billingRows.map((row) => (
-                                <tr key={`${row.classId}-${row.enrollmentId}`}>
-                                    <td className="px-4 py-3 text-slate-900">
-                                        {row.classId}
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-700">
-                                        {row.attendanceCount} 次 / {row.chargedSessions} 课次
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                                        {formatCurrency(row.lessonFee)}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                                        {formatCurrency(row.materialFee)}
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-emerald-700">
-                                        {formatCurrency(row.discountAmount)}
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-700">
-                                        {formatWaiverReason(row.waiveReason)}
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-500">
-                                        {row.remarks ?? "—"}
-                                    </td>
+            {isAllStudentsSelected ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+                    整班导出将直接在生成的 Excel 中查看每位学生的账单明细。
+                </div>
+            ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    {billingRows.length === 0 ? (
+                        <div className="p-6 text-sm text-slate-500">
+                            暂无账单行。
+                        </div>
+                    ) : (
+                        <table className="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-slate-600">
+                                        班级 ID
+                                    </th>
+                                    <th className="px-4 py-2 text-left font-medium text-slate-600">
+                                        出勤/计费
+                                    </th>
+                                    <th className="px-4 py-2 text-right font-medium text-slate-600">
+                                        课时费
+                                    </th>
+                                    <th className="px-4 py-2 text-right font-medium text-slate-600">
+                                        材料费
+                                    </th>
+                                    <th className="px-4 py-2 text-right font-medium text-slate-600">
+                                        减免
+                                    </th>
+                                    <th className="px-4 py-2 text-left font-medium text-slate-600">
+                                        原因
+                                    </th>
+                                    <th className="px-4 py-2 text-left font-medium text-slate-600">
+                                        备注
+                                    </th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                                {billingRows.map((row) => (
+                                    <tr key={`${row.classId}-${row.enrollmentId}`}>
+                                        <td className="px-4 py-3 text-slate-900">
+                                            {row.classId}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                            {row.attendanceCount} 次 / {row.chargedSessions} 课次
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                                            {formatCurrency(row.lessonFee)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                                            {formatCurrency(row.materialFee)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-emerald-700">
+                                            {formatCurrency(row.discountAmount)}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-700">
+                                            {formatWaiverReason(row.waiveReason)}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-500">
+                                            {row.remarks ?? "—"}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

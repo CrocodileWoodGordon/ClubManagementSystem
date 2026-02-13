@@ -99,11 +99,12 @@
 - 2026-02-12：实现结算预览服务（`BillingService`），依赖考勤/报名数据生成班级与学生维度的 `FeeBreakdown`，并打通 `ReportingService` 与 `/api/reports/settlement|billing` 接口返回实时费用明细（经 `cargo check` 验证通过）。
 - 2026-02-12：新增报表批处理任务（`backend/src/tasks/reporting.rs`），按学期触发 `billing_runs` 记录，批量将 `FeeBreakdown` 写入 `billing_items` 并导出包含班级/学生费用拆解的 CSV，运行完成后自动更新状态与摘要说明。
 - 2026-02-12：前端费用结算页面上线（`/app/(admin)/billing`），可按校区/社团/星期筛选班级，实时调用 `reportingService.fetchClassSettlement` 预览课时费/材料费/优惠并导出 CSV，页面自带 loading 骨架与指标卡。
-- 2026-02-12：前端报表/学生账单页面上线（`/app/(admin)/reports`），基于学生名册选择班级与学生后调用 `reportingService.fetchStudentBilling` 查看账单并导出 CSV，新增 `loading.tsx`、金币统计卡与导出 helper 复用。
+- 2026-02-13：报表导出新增整班 Excel 能力，后端提供 `GET /api/reports/billing/homeroom` 汇总班级全部学生费用并由前端一键导出，学生下拉支持“全部”选项触发整班导出。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
 - `frontend/components/forms/BulkAssignmentForm.tsx` 预期调用 `/api/classes/assign` 批量设置班级编号（暂未接线）。
+- `frontend/services/reportingService.ts` 新增 `fetchHomeroomBilling`，调用 `GET /api/reports/billing/homeroom` 返回班级内全部学生的费用明细，供报表页“全部”导出 Excel。
 - `frontend/components/upload/ExcelDropzone.tsx` 将对接 `/api/import/enrollments` 上传 Excel。
 - 新增校区维度：后端 `enrollments`、`classes`、`club_terms` 均要求 `campus_id`，Excel 导入会根据学生的 `homeroom` 自动写入，前端筛选/分班时需补充校区参数（`/api/enrollments/pending` 已支持多条件筛选）。
 - `/api/import/placeholders` 返回当前导入场景使用的占位文本；PUT 接口可让管理员自定义占位字符串，前端如需展示可直接读取该接口。

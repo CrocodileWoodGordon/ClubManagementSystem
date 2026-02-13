@@ -1,5 +1,5 @@
 import { ApiClient } from "@/lib/api/client";
-import type { FeeBreakdown } from "@/lib/types";
+import type { FeeBreakdown, HomeroomBillingReport, StudentBillingItem } from "@/lib/types";
 
 const client = new ApiClient();
 
@@ -34,6 +34,32 @@ export async function fetchStudentBilling(studentId: string): Promise<FeeBreakdo
     });
 }
 
+export async function fetchHomeroomBilling(
+    homeroomId: string,
+): Promise<HomeroomBillingReport> {
+    if (!homeroomId) {
+        throw new ReportingServiceError("请先选择班级");
+    }
+    return safeRequest("加载整班账单失败", async () => {
+        const response = await client.get<HomeroomBillingApiResponse>(
+            `/api/reports/billing/homeroom?homeroom_id=${encodeURIComponent(homeroomId)}`,
+        );
+        return {
+            homeroom: {
+                id: response.homeroom.id,
+                displayName: response.homeroom.display_name,
+                campusName: response.homeroom.campus_name,
+            },
+            students: response.students.map((student) => ({
+                studentId: student.student_id,
+                studentName: student.student_name,
+                studentCode: toOptional(student.student_code),
+                rows: student.rows.map(mapStudentBreakdown),
+            })),
+        };
+    });
+}
+
 async function safeRequest<T>(
     context: string,
     executor: () => Promise<T>,
@@ -64,6 +90,16 @@ function mapBreakdown(payload: FeeBreakdownApi): FeeBreakdown {
     };
 }
 
+function mapStudentBreakdown(payload: StudentBillingItemApi): StudentBillingItem {
+    const breakdown = mapBreakdown(payload);
+    return {
+        ...breakdown,
+        clubId: payload.club_id,
+        clubName: payload.club_name,
+        classCode: toOptional(payload.class_code),
+    };
+}
+
 function toOptional<T>(value: T | null | undefined): T | undefined {
     return value === null || value === undefined ? undefined : value;
 }
@@ -83,4 +119,28 @@ interface FeeBreakdownApi {
     charged_sessions: number;
     waive_reason: string | null;
     remarks: string | null;
+}
+
+interface HomeroomBillingApiResponse {
+    homeroom: HomeroomInfoApi;
+    students: StudentBillingBundleApi[];
+}
+
+interface HomeroomInfoApi {
+    id: string;
+    display_name: string;
+    campus_name: string;
+}
+
+interface StudentBillingBundleApi {
+    student_id: string;
+    student_name: string;
+    student_code: string | null;
+    rows: StudentBillingItemApi[];
+}
+
+interface StudentBillingItemApi extends FeeBreakdownApi {
+    club_id: string;
+    club_name: string;
+    class_code: string | null;
 }
