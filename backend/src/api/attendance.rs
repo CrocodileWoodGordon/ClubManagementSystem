@@ -3,6 +3,7 @@ use axum::{
     extract::{Multipart, Path, Query, State},
     routing::{get, post},
 };
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use chrono::{Datelike, Duration, NaiveDate, NaiveTime, Timelike};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
@@ -19,10 +20,12 @@ use crate::{
         AttendanceHistory, AttendanceImportOptions, AttendancePersistPlan, AttendanceRosterEntry,
         AttendanceService,
     },
-    utils::excel::ExcelWorkbook,
+    utils::excel::{ExcelWorkbook, encode_xlsx, sanitize_file_name},
 };
 
 const DEFAULT_PLACEHOLDERS: &[&str] = &["(跳过)"];
+
+const XLSX_MIME_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 #[derive(Debug, Deserialize)]
 pub struct AttendanceQuery {
@@ -84,6 +87,9 @@ pub struct ClassMeetingDto {
 pub struct WorksheetDto {
     pub name: String,
     pub rows: Vec<Vec<String>>,
+    pub file_name: String,
+    pub file_base64: String,
+    pub mime_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -164,12 +170,21 @@ async fn download_template(
         })
         .collect::<Result<Vec<_>, AppError>>()?;
 
+    let worksheet_name = template.worksheet.name;
+    let worksheet_rows = template.worksheet.rows;
+    let workbook_bytes = encode_xlsx(&worksheet_name, &worksheet_rows)?;
+    let file_name = sanitize_file_name(&worksheet_name);
+    let file_base64 = BASE64.encode(&workbook_bytes);
+
     let response = AttendanceTemplateResponse {
         class: ClassOverview::from(&class),
         meetings: meetings_dto,
         worksheet: WorksheetDto {
-            name: template.worksheet.name,
-            rows: template.worksheet.rows,
+            name: worksheet_name,
+            rows: worksheet_rows,
+            file_name,
+            file_base64,
+            mime_type: XLSX_MIME_TYPE.to_string(),
         },
     };
     Ok(Json(response))

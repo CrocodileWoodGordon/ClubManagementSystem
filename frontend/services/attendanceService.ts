@@ -113,6 +113,9 @@ function mapTemplate(payload: AttendanceTemplateApiResponse): AttendanceTemplate
         worksheet: {
             name: payload.worksheet.name,
             rows: payload.worksheet.rows,
+            fileName: payload.worksheet.file_name,
+            fileBase64: payload.worksheet.file_base64,
+            mimeType: payload.worksheet.mime_type,
         },
     };
 }
@@ -221,6 +224,9 @@ interface AttendanceMeetingApi {
 interface AttendanceWorksheetApi {
     name: string;
     rows: string[][];
+    file_name: string;
+    file_base64: string;
+    mime_type: string;
 }
 
 interface AttendanceHistoryResponse {

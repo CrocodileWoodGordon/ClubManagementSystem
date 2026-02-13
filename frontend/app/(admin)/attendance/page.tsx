@@ -12,6 +12,7 @@ import type {
     EnrollmentSummaryRow,
 } from "@/lib/types";
 import { formatAttendanceStatus, formatWeekday } from "@/lib/utils";
+import { downloadBase64File } from "@/lib/utils/export";
 import { fetchEnrollmentSummary } from "@/services/enrollmentService";
 import { fetchClassesForSlot } from "@/services/classAssignmentService";
 import {
@@ -247,10 +248,13 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
                 meetings: data.meetings,
                 worksheetName: data.worksheet.name,
                 rowCount: data.worksheet.rows.length,
+                fileName: data.worksheet.fileName,
+                fileBase64: data.worksheet.fileBase64,
+                mimeType: data.worksheet.mimeType,
             });
             const firstMeeting = data.meetings[0]?.id ?? "";
             setSelectedMeetingId(firstMeeting);
-            triggerWorksheetDownload(data.worksheet.name, data.worksheet.rows);
+            downloadBase64File(data.worksheet.fileBase64, data.worksheet.mimeType, data.worksheet.fileName);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setTemplateError(message);
@@ -615,26 +619,6 @@ function parseIdentifierInput(value: string): string[] {
         .filter((item) => item.length > 0);
 }
 
-function triggerWorksheetDownload(name: string, rows: string[][]) {
-    const csv = rows
-        .map((row) => row.map((cell) => csvEscape(cell)).join(","))
-        .join("\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${name}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-}
-
-function csvEscape(value: string): string {
-    if (value.includes(",") || value.includes("\n") || value.includes("\"")) {
-        return `"${value.replace(/"/g, '""')}"`;
-    }
-    return value;
-}
-
 function formatTimestamp(value: string) {
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) {
@@ -684,6 +668,9 @@ interface AttendanceTemplateState {
     meetings: AttendanceMeeting[];
     worksheetName: string;
     rowCount: number;
+    fileName: string;
+    fileBase64: string;
+    mimeType: string;
 }
 
 interface Option {

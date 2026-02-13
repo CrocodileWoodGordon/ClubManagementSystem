@@ -24,6 +24,12 @@ export function exportCsv(headers: string[], rows: string[][], fileName: string)
     downloadCsv(csv, fileName);
 }
 
+export function downloadBase64File(base64: string, mimeType: string, fileName: string) {
+    const binary = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    const blob = new Blob([binary], { type: mimeType });
+    downloadBlob(blob, fileName);
+}
+
 export function exportHomeroomBillingExcel(
     report: HomeroomBillingReport,
     fileName: string,

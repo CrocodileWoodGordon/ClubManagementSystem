@@ -209,6 +209,9 @@ export interface AttendanceMeeting {
 export interface AttendanceWorksheet {
     name: string;
     rows: string[][];
+    fileName: string;
+    fileBase64: string;
+    mimeType: string;
 }
 
 export interface AttendanceTemplate {
