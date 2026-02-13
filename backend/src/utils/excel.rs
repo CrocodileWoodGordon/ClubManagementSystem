@@ -9,6 +9,15 @@ use crate::error::AppError;
 pub struct Worksheet {
     pub name: String,
     pub rows: Vec<Vec<String>>,
+    pub merged_cells: Vec<CellMerge>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CellMerge {
+    pub start_row: usize,
+    pub start_col: usize,
+    pub end_row: usize,
+    pub end_col: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +77,11 @@ impl ExcelWorkbook {
                     .rows()
                     .map(|row| row.iter().map(cell_to_string).collect())
                     .collect();
-                sheets.push(Worksheet { name, rows });
+                sheets.push(Worksheet {
+                    name,
+                    rows,
+                    merged_cells: Vec::new(),
+                });
             }
         }
 
@@ -131,9 +144,9 @@ fn infer_extension(bytes: &[u8], file_name: Option<&str>) -> String {
     }
 }
 
-pub fn encode_xlsx(sheet_name: &str, rows: &[Vec<String>]) -> Result<Vec<u8>, AppError> {
-    let sheet_title = sanitize_sheet_name(sheet_name);
-    let sheet_xml = build_sheet_xml(rows);
+pub fn encode_xlsx(worksheet: &Worksheet) -> Result<Vec<u8>, AppError> {
+    let sheet_title = sanitize_sheet_name(&worksheet.name);
+    let sheet_xml = build_sheet_xml(worksheet);
     let workbook_xml = build_workbook_xml(&sheet_title);
     let workbook_rels_xml = build_workbook_rels();
     let styles_xml = build_styles_xml();
@@ -194,11 +207,11 @@ fn sanitize_sheet_name(name: &str) -> String {
     sanitized
 }
 
-fn build_sheet_xml(rows: &[Vec<String>]) -> String {
+fn build_sheet_xml(worksheet: &Worksheet) -> String {
     let mut xml = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#,
     );
-    for (row_index, row) in rows.iter().enumerate() {
+    for (row_index, row) in worksheet.rows.iter().enumerate() {
         let row_number = row_index + 1;
         xml.push_str(&format!("<row r=\"{}\">", row_number));
         for (col_index, cell) in row.iter().enumerate() {
@@ -215,7 +228,18 @@ fn build_sheet_xml(rows: &[Vec<String>]) -> String {
         }
         xml.push_str("</row>");
     }
-    xml.push_str("</sheetData></worksheet>");
+    xml.push_str("</sheetData>");
+    if !worksheet.merged_cells.is_empty() {
+        xml.push_str(&format!(
+            "<mergeCells count=\"{}\">",
+            worksheet.merged_cells.len()
+        ));
+        for merge in &worksheet.merged_cells {
+            xml.push_str(&format!("<mergeCell ref=\"{}\"/>", merge.to_ref()));
+        }
+        xml.push_str("</mergeCells>");
+    }
+    xml.push_str("</worksheet>");
     xml
 }
 
@@ -305,6 +329,37 @@ fn column_reference(index: usize) -> String {
         idx = (idx - 1) / 26;
     }
     result
+}
+
+impl CellMerge {
+    pub fn new(start_row: usize, start_col: usize, end_row: usize, end_col: usize) -> Self {
+        let (sr, er) = if start_row <= end_row {
+            (start_row, end_row)
+        } else {
+            (end_row, start_row)
+        };
+        let (sc, ec) = if start_col <= end_col {
+            (start_col, end_col)
+        } else {
+            (end_col, start_col)
+        };
+        Self {
+            start_row: sr,
+            start_col: sc,
+            end_row: er,
+            end_col: ec,
+        }
+    }
+
+    pub fn to_ref(&self) -> String {
+        format!(
+            "{}{}:{}{}",
+            column_reference(self.start_col),
+            self.start_row,
+            column_reference(self.end_col),
+            self.end_row
+        )
+    }
 }
 
 fn xml_escape(value: &str) -> String {

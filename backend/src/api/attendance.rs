@@ -18,9 +18,9 @@ use crate::{
     error::AppError,
     services::attendance::{
         AttendanceHistory, AttendanceImportOptions, AttendancePersistPlan, AttendanceRosterEntry,
-        AttendanceService,
+        AttendanceService, AttendanceTemplateContext,
     },
-    utils::excel::{ExcelWorkbook, encode_xlsx, sanitize_file_name},
+    utils::excel::{ExcelWorkbook, Worksheet, encode_xlsx, sanitize_file_name},
 };
 
 const DEFAULT_PLACEHOLDERS: &[&str] = &["(跳过)"];
@@ -154,8 +154,10 @@ async fn download_template(
         })
         .collect();
 
+    let template_context = fetch_template_context(&state, &class).await?;
     let service = AttendanceService::new();
-    let template = service.generate_template(&class, &session_dates, &roster_profiles);
+    let template =
+        service.generate_template(&class, &session_dates, &roster_profiles, template_context);
 
     let meetings_dto = meetings
         .iter()
@@ -170,11 +172,15 @@ async fn download_template(
         })
         .collect::<Result<Vec<_>, AppError>>()?;
 
-    let worksheet_name = template.worksheet.name;
-    let worksheet_rows = template.worksheet.rows;
-    let workbook_bytes = encode_xlsx(&worksheet_name, &worksheet_rows)?;
-    let file_name = sanitize_file_name(&worksheet_name);
+    let worksheet = template.worksheet;
+    let workbook_bytes = encode_xlsx(&worksheet)?;
+    let file_name = sanitize_file_name(&worksheet.name);
     let file_base64 = BASE64.encode(&workbook_bytes);
+    let Worksheet {
+        name: worksheet_name,
+        rows: worksheet_rows,
+        ..
+    } = worksheet;
 
     let response = AttendanceTemplateResponse {
         class: ClassOverview::from(&class),
@@ -367,6 +373,40 @@ async fn fetch_class(state: &ApiState, class_id: Uuid) -> Result<ClassInstance, 
     } else {
         Err(AppError::NotFound("班级不存在或已被删除".into()))
     }
+}
+
+async fn fetch_template_context(
+    state: &ApiState,
+    class: &ClassInstance,
+) -> Result<AttendanceTemplateContext, AppError> {
+    let row = sqlx::query_as::<_, TemplateContextRow>(
+        r#"
+            SELECT cl.name AS club_name,
+                   cam.short_name AS campus_short_name,
+                   cam.name AS campus_name
+            FROM classes c
+            LEFT JOIN clubs cl ON cl.id = c.club_id
+            LEFT JOIN campuses cam ON cam.id = c.campus_id
+            WHERE c.id = $1
+        "#,
+    )
+    .bind(class.id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    let (club_name_opt, campus_short_name, campus_name) = match row {
+        Some(data) => (data.club_name, data.campus_short_name, data.campus_name),
+        None => (None, None, None),
+    };
+
+    let club_name = club_name_opt.unwrap_or_default();
+    let campus_chosen = match campus_short_name {
+        Some(short) if !short.trim().is_empty() => short,
+        _ => campus_name.unwrap_or_default(),
+    };
+
+    Ok(AttendanceTemplateContext::new(club_name, campus_chosen))
 }
 
 async fn fetch_class_meetings(
@@ -754,6 +794,13 @@ fn db_err(err: sqlx::Error) -> AppError {
 
 fn validation(err: impl ToString) -> AppError {
     AppError::Validation(err.to_string())
+}
+
+#[derive(Debug, FromRow)]
+struct TemplateContextRow {
+    club_name: Option<String>,
+    campus_short_name: Option<String>,
+    campus_name: Option<String>,
 }
 
 #[derive(Debug, FromRow)]

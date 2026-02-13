@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -8,19 +8,15 @@ use crate::domain::{
     AttendanceSessionKey, ClassInstance, StudentProfile,
 };
 use crate::error::AppError;
-use crate::utils::excel::{ExcelWorkbook, Worksheet};
+use crate::utils::excel::{CellMerge, ExcelWorkbook, Worksheet};
 
-/// 默认模板列顺序：班级、课次、日期、学生标识、姓名、状态、出勤分钟、备注。
-const TEMPLATE_HEADERS: [&str; 8] = [
-    "Class",
-    "Session",
-    "Date",
-    "Student Identifier",
-    "Student Name",
-    "Status",
-    "Minutes",
-    "Note",
-];
+const TEMPLATE_TOTAL_COLUMNS: usize = 20;
+const TEMPLATE_WEEK_COLUMNS: usize = 18;
+const TEMPLATE_UID_COLUMN_INDEX: usize = 1;
+const TEMPLATE_FIRST_WEEK_COLUMN_INDEX: usize = 2;
+const TEMPLATE_HEADER_ROW_INDEX: usize = 3;
+const TEMPLATE_INSTRUCTION_TEXT: &str = "将考勤情况为缺席的同学对应单元格删除（设为空），考勤情况正常的同学无需更改。如果课时过多，直接将后面多余课时所有同学的对应单元格删除（设置为空）即可。机器读取，请不要擅自改动文件其余部分。如有成员增减，请重新获取最新的考勤表。";
+const TEMPLATE_DEFAULT_STATUS: &str = "正常";
 
 #[derive(Debug, Default, Clone)]
 pub struct AttendanceService;
@@ -34,30 +30,29 @@ impl AttendanceService {
     pub fn generate_template(
         &self,
         class: &ClassInstance,
-        session_dates: &[NaiveDate],
+        _session_dates: &[NaiveDate],
         roster: &[StudentProfile],
+        context: AttendanceTemplateContext,
     ) -> AttendanceTemplate {
-        let mut rows = Vec::new();
-        for (session_index, meeting_date) in session_dates.iter().enumerate() {
-            let session_number = (session_index + 1).to_string();
-            for student in roster {
-                rows.push(vec![
-                    class.class_code.clone(),
-                    session_number.clone(),
-                    meeting_date.to_string(),
-                    format!("{}-{}", student.original_class, student.name),
-                    student.name.clone(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                ]);
-            }
+        let sheet_name = format!("{}-{}", class.class_code, class.weekday);
+        let club_name = context.club_or_default();
+        let campus_name = context.campus_or_default();
+
+        let mut rows = Vec::with_capacity(roster.len() + 4);
+        rows.push(build_title_row(&class.class_code));
+        rows.push(build_meta_row(&club_name, &campus_name, class));
+        rows.push(build_instruction_row());
+        rows.push(build_header_row());
+
+        for (index, student) in roster.iter().enumerate() {
+            rows.push(build_student_row(index, student));
         }
 
         AttendanceTemplate {
             worksheet: Worksheet {
-                name: format!("{}-{}", class.class_code, class.weekday),
-                rows: build_template_rows(rows),
+                name: sheet_name,
+                rows,
+                merged_cells: build_default_merges(),
             },
         }
     }
@@ -73,19 +68,28 @@ impl AttendanceService {
         let sheet = workbook.primary_sheet();
         let filter = ImportFilterSet::new(options.placeholders, options.ignored_identifiers);
         let mut parsed_rows = Vec::new();
+        let status_col_index = resolve_status_column(session.session_number)?;
 
-        for (idx, row) in sheet.rows.iter().enumerate().skip(1) {
-            let identifier = row.get(3).cloned().unwrap_or_default();
+        for (idx, row) in sheet.rows.iter().enumerate().skip(4) {
+            let identifier = row
+                .get(TEMPLATE_UID_COLUMN_INDEX)
+                .cloned()
+                .unwrap_or_default();
             if filter.should_skip(&identifier) {
                 continue;
             }
 
+            let status_text = row
+                .get(status_col_index)
+                .cloned()
+                .unwrap_or_else(|| TEMPLATE_DEFAULT_STATUS.to_string());
+
             let excel_row = AttendanceExcelRow {
                 source_row: (idx + 1) as u32,
                 student_identifier: identifier,
-                status_text: row.get(5).cloned().unwrap_or_default(),
-                minutes_value: row.get(6).cloned(),
-                note: row.get(7).cloned(),
+                status_text,
+                minutes_value: None,
+                note: None,
             };
 
             match AttendanceImportRow::try_from(excel_row) {
@@ -185,6 +189,37 @@ impl AttendanceService {
 }
 
 #[derive(Debug, Clone)]
+pub struct AttendanceTemplateContext {
+    pub club_name: String,
+    pub campus_name: String,
+}
+
+impl AttendanceTemplateContext {
+    pub fn new(club_name: impl Into<String>, campus_name: impl Into<String>) -> Self {
+        Self {
+            club_name: club_name.into().trim().to_string(),
+            campus_name: campus_name.into().trim().to_string(),
+        }
+    }
+
+    fn club_or_default(&self) -> String {
+        if self.club_name.is_empty() {
+            "未命名社团".into()
+        } else {
+            self.club_name.clone()
+        }
+    }
+
+    fn campus_or_default(&self) -> String {
+        if self.campus_name.is_empty() {
+            "未命名校区".into()
+        } else {
+            self.campus_name.clone()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AttendanceTemplate {
     pub worksheet: Worksheet,
 }
@@ -192,7 +227,7 @@ pub struct AttendanceTemplate {
 impl AttendanceTemplate {
     #[allow(dead_code)]
     pub fn headers(&self) -> &[String] {
-        &self.worksheet.rows[0]
+        &self.worksheet.rows[TEMPLATE_HEADER_ROW_INDEX]
     }
 
     #[allow(dead_code)]
@@ -257,11 +292,96 @@ pub struct AttendancePersistPlan {
     pub skipped: Vec<AttendanceImportRow>,
 }
 
-fn build_template_rows(mut rows: Vec<Vec<String>>) -> Vec<Vec<String>> {
-    let mut result = Vec::with_capacity(rows.len() + 1);
-    result.push(TEMPLATE_HEADERS.iter().map(|v| v.to_string()).collect());
-    result.append(&mut rows);
-    result
+fn build_title_row(class_name: &str) -> Vec<String> {
+    let mut row = blank_row();
+    row[0] = class_name.to_string();
+    row
+}
+
+fn build_meta_row(club_name: &str, campus_name: &str, class: &ClassInstance) -> Vec<String> {
+    let mut row = blank_row();
+    row[0] = format!("社团：{}", club_name);
+    row[8] = format!("校区：{}", campus_name);
+    row[12] = format!("上课时间：{}", format_class_schedule(class));
+    row
+}
+
+fn build_instruction_row() -> Vec<String> {
+    let mut row = blank_row();
+    row[0] = TEMPLATE_INSTRUCTION_TEXT.to_string();
+    row
+}
+
+fn build_header_row() -> Vec<String> {
+    let mut row = Vec::with_capacity(TEMPLATE_TOTAL_COLUMNS);
+    row.push("编号".into());
+    row.push("学生UID".into());
+    for week in 1..=TEMPLATE_WEEK_COLUMNS {
+        row.push(format!("第{}周", week));
+    }
+    row
+}
+
+fn build_student_row(index: usize, student: &StudentProfile) -> Vec<String> {
+    let mut row = Vec::with_capacity(TEMPLATE_TOTAL_COLUMNS);
+    row.push((index + 1).to_string());
+    row.push(format!("{}-{}", student.original_class, student.name));
+    for _ in 0..TEMPLATE_WEEK_COLUMNS {
+        row.push(TEMPLATE_DEFAULT_STATUS.to_string());
+    }
+    row
+}
+
+fn build_default_merges() -> Vec<CellMerge> {
+    vec![
+        CellMerge::new(1, 1, 1, TEMPLATE_TOTAL_COLUMNS),
+        CellMerge::new(2, 1, 2, 8),
+        CellMerge::new(2, 9, 2, 12),
+        CellMerge::new(2, 13, 2, TEMPLATE_TOTAL_COLUMNS),
+        CellMerge::new(3, 1, 3, TEMPLATE_TOTAL_COLUMNS),
+    ]
+}
+
+fn blank_row() -> Vec<String> {
+    vec![String::new(); TEMPLATE_TOTAL_COLUMNS]
+}
+
+fn format_class_schedule(class: &ClassInstance) -> String {
+    let weekday = weekday_label(class.weekday);
+    let start = format_time(class.start_time);
+    let end = format_time(class.end_time);
+    format!("{} {}-{}", weekday, start, end)
+}
+
+fn format_time(value: NaiveTime) -> String {
+    value.format("%H:%M").to_string()
+}
+
+fn weekday_label(weekday: u8) -> &'static str {
+    match weekday {
+        1 => "周一",
+        2 => "周二",
+        3 => "周三",
+        4 => "周四",
+        5 => "周五",
+        6 => "周六",
+        7 => "周日",
+        _ => "周?",
+    }
+}
+
+fn resolve_status_column(session_number: u16) -> Result<usize, AppError> {
+    if session_number == 0 {
+        return Err(AppError::Validation("课次编号无效".into()));
+    }
+    let session_index = session_number as usize;
+    if session_index > TEMPLATE_WEEK_COLUMNS {
+        return Err(AppError::Validation(format!(
+            "课次编号 {} 超出可导出模板范围 (1-{})",
+            session_number, TEMPLATE_WEEK_COLUMNS
+        )));
+    }
+    Ok(TEMPLATE_FIRST_WEEK_COLUMN_INDEX + session_index - 1)
 }
 
 struct ImportFilterSet {
@@ -345,11 +465,18 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
             NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(),
         ];
+        let context = AttendanceTemplateContext::new("机器人社", "主校区");
 
-        let template = service.generate_template(&class, &dates, &roster);
-        assert_eq!(template.rows().len(), roster.len() * dates.len() + 1);
-        assert_eq!(template.headers().len(), TEMPLATE_HEADERS.len());
-        assert_eq!(template.rows()[1][3], "3A-李雷");
+        let template = service.generate_template(&class, &dates, &roster, context);
+        assert_eq!(template.rows().len(), roster.len() + 4);
+        assert_eq!(template.headers().len(), TEMPLATE_TOTAL_COLUMNS);
+        let first_student_row = TEMPLATE_HEADER_ROW_INDEX + 1;
+        assert_eq!(
+            template.rows()[first_student_row][TEMPLATE_UID_COLUMN_INDEX],
+            "3A-李雷"
+        );
+        assert_eq!(template.worksheet.merged_cells.len(), 5);
+        assert_eq!(template.headers()[2], "第1周");
     }
 
     #[test]
@@ -360,41 +487,26 @@ mod tests {
             student_identifier: "3A-李雷".into(),
         }];
         let roster_lookup = AttendanceService::build_roster_lookup(&roster_entries);
-        let sheet = Worksheet {
-            name: "Sheet1".into(),
-            rows: vec![
-                TEMPLATE_HEADERS.iter().map(|v| v.to_string()).collect(),
-                vec![
-                    "A1".into(),
-                    "1".into(),
-                    "2026-03-01".into(),
-                    "3A-李雷".into(),
-                    "李雷".into(),
-                    "请假".into(),
-                    "45".into(),
-                    "note".into(),
-                ],
-                vec![
-                    "A1".into(),
-                    "1".into(),
-                    "2026-03-01".into(),
-                    "(跳过)".into(),
-                    "".into(),
-                    "P".into(),
-                    "".into(),
-                    "".into(),
-                ],
-            ],
-        };
+
+        let class = fake_class();
+        let roster = fake_roster();
+        let dates = vec![NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()];
+        let context = AttendanceTemplateContext::new("机器人社", "主校区");
+        let mut worksheet = service
+            .generate_template(&class, &dates, &roster, context)
+            .worksheet;
+
+        let first_student_row = TEMPLATE_HEADER_ROW_INDEX + 1;
+        worksheet.rows[first_student_row][TEMPLATE_FIRST_WEEK_COLUMN_INDEX] = "请假".into();
+        let placeholder_row = TEMPLATE_HEADER_ROW_INDEX + 2;
+        worksheet.rows[placeholder_row][TEMPLATE_UID_COLUMN_INDEX] = "(跳过)".into();
+
         let workbook = ExcelWorkbook {
-            sheets: vec![sheet],
+            sheets: vec![worksheet],
         };
-        let session = AttendanceSessionKey::new(
-            fake_class().id,
-            NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
-            1,
-        )
-        .unwrap();
+        let session =
+            AttendanceSessionKey::new(class.id, NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(), 1)
+                .unwrap();
         let class_meeting_id = Uuid::new_v4();
         let placeholder = String::from("(跳过)");
         let options = AttendanceImportOptions::new(

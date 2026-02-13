@@ -77,7 +77,7 @@ impl AttendanceStatus {
         let normalized = value.trim().to_uppercase();
         match normalized.as_str() {
             "" => Some(AttendanceStatus::Present),
-            "P" | "PRESENT" | "出勤" => Some(AttendanceStatus::Present),
+            "P" | "PRESENT" | "出勤" | "正常" => Some(AttendanceStatus::Present),
             "A" | "ABSENT" | "缺勤" => Some(AttendanceStatus::Absent),
             "E" | "EXCUSED" | "SICK" | "病假" => Some(AttendanceStatus::Excused),
             "L" | "LEAVE" | "请假" | "事假" => Some(AttendanceStatus::Leave),
