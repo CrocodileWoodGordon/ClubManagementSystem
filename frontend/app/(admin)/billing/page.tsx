@@ -124,6 +124,8 @@ function BillingWorkspace({ summaryRows }: BillingWorkspaceProps) {
     const [selectedWeekday, setSelectedWeekday] = useState(
         firstRow ? String(firstRow.requestedWeekday) : "",
     );
+    const selectedWeekdayNumber = selectedWeekday ? Number(selectedWeekday) : null;
+    const canLoadSlot = Boolean(selectedCampus && selectedClub && selectedWeekdayNumber);
 
     const [classes, setClasses] = useState<ClassInstance[]>([]);
     const [classLoading, setClassLoading] = useState(false);
@@ -268,9 +270,6 @@ function BillingWorkspace({ summaryRows }: BillingWorkspaceProps) {
             }
         }
     }, [selectedClassId]);
-
-    const canLoadSlot = Boolean(selectedCampus && selectedClub && selectedWeekday);
-    const selectedWeekdayNumber = selectedWeekday ? Number(selectedWeekday) : null;
 
     const studentLookup = useMemo(() => {
         const map = new Map<string, PendingEnrollment>();
