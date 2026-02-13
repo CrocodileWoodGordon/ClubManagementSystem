@@ -51,15 +51,17 @@ impl<'a> ReportingTask<'a> {
         triggered_by: &str,
         run_type: BillingRunType,
     ) -> Result<SettlementBatchResult, AppError> {
-        let created_run = self
-            .insert_run(term_id, run_type, triggered_by)
-            .await?;
+        let created_run = self.insert_run(term_id, run_type, triggered_by).await?;
 
         let collected = match self.collect_fee_breakdowns(term_id).await {
             Ok(data) => data,
             Err(err) => {
                 let _ = self
-                    .update_run_status(created_run.id, BillingRunStatus::Failed, Some(err.to_string()))
+                    .update_run_status(
+                        created_run.id,
+                        BillingRunStatus::Failed,
+                        Some(err.to_string()),
+                    )
                     .await;
                 return Err(err);
             }
@@ -72,7 +74,11 @@ impl<'a> ReportingTask<'a> {
             Ok(count) => count,
             Err(err) => {
                 let _ = self
-                    .update_run_status(created_run.id, BillingRunStatus::Failed, Some(err.to_string()))
+                    .update_run_status(
+                        created_run.id,
+                        BillingRunStatus::Failed,
+                        Some(err.to_string()),
+                    )
                     .await;
                 return Err(err);
             }
@@ -161,10 +167,7 @@ impl<'a> ReportingTask<'a> {
         Ok(row.into())
     }
 
-    async fn collect_fee_breakdowns(
-        &self,
-        term_id: Uuid,
-    ) -> Result<SettlementData, AppError> {
+    async fn collect_fee_breakdowns(&self, term_id: Uuid) -> Result<SettlementData, AppError> {
         let class_ids = sqlx::query_scalar(
             r#"
                 SELECT id
@@ -366,7 +369,10 @@ fn build_items_from_breakdown(entry: &FeeBreakdown) -> Vec<BillingItemInsert> {
             ..Default::default()
         };
 
-        if matches!(entry.waive_reason, Some(TuitionWaiverReason::TeacherBenefit)) {
+        if matches!(
+            entry.waive_reason,
+            Some(TuitionWaiverReason::TeacherBenefit)
+        ) {
             snapshot.is_teacher_child = true;
             snapshot.teacher_discount_rate = Some(1.0);
         }

@@ -3,7 +3,7 @@ use axum::{
     extract::{Multipart, Path, Query, State},
     routing::{get, post},
 };
-use chrono::{NaiveDate, NaiveTime, Timelike};
+use chrono::{Datelike, Duration, NaiveDate, NaiveTime, Timelike};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
@@ -123,7 +123,7 @@ async fn download_template(
     Path(class_id): Path<Uuid>,
 ) -> Result<Json<AttendanceTemplateResponse>, AppError> {
     let class = fetch_class(&state, class_id).await?;
-    let meetings = fetch_class_meetings(&state, class_id).await?;
+    let meetings = ensure_class_meetings(&state, &class).await?;
     if meetings.is_empty() {
         return Err(AppError::Validation(
             "该班级尚未创建上课安排，无法生成模板".into(),
@@ -371,6 +371,107 @@ async fn fetch_class_meetings(
     .await
     .map_err(|err| AppError::Database(err.to_string()))?;
     Ok(rows)
+}
+
+async fn ensure_class_meetings(
+    state: &ApiState,
+    class: &ClassInstance,
+) -> Result<Vec<ClassMeetingRow>, AppError> {
+    let mut meetings = fetch_class_meetings(state, class.id).await?;
+    if !meetings.is_empty() {
+        return Ok(meetings);
+    }
+
+    let term = fetch_term_window(state, class.term_id).await?;
+    let dates = build_meeting_dates(class.weekday, &term)?;
+    if dates.is_empty() {
+        return Err(AppError::Validation(
+            "该班级所在学期范围内没有匹配的上课日期，无法生成模板".into(),
+        ));
+    }
+
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    for (index, meeting_date) in dates.iter().enumerate() {
+        let session_number = i16::try_from(index + 1)
+            .map_err(|_| AppError::Validation("课次数量超出支持范围".into()))?;
+        let meeting_id = Uuid::new_v4();
+        sqlx::query(
+            r#"
+                INSERT INTO class_meetings (id, class_id, meeting_date, session_number)
+                VALUES ($1,$2,$3,$4)
+                ON CONFLICT (class_id, meeting_date) DO NOTHING
+            "#,
+        )
+        .bind(meeting_id)
+        .bind(class.id)
+        .bind(meeting_date)
+        .bind(session_number)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+    }
+
+    tx.commit()
+        .await
+        .map_err(|err| AppError::Database(err.to_string()))?;
+
+    meetings = fetch_class_meetings(state, class.id).await?;
+    Ok(meetings)
+}
+
+async fn fetch_term_window(state: &ApiState, term_id: Uuid) -> Result<TermWindow, AppError> {
+    let row = sqlx::query_as::<_, TermWindow>(
+        r#"
+            SELECT start_date, end_date
+            FROM terms
+            WHERE id = $1
+        "#,
+    )
+    .bind(term_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| AppError::Database(err.to_string()))?;
+
+    if let Some(window) = row {
+        if window.start_date > window.end_date {
+            return Err(AppError::Validation("学期的起止日期不合法".into()));
+        }
+        Ok(window)
+    } else {
+        Err(AppError::NotFound("未找到对应的学期信息".into()))
+    }
+}
+
+fn build_meeting_dates(weekday: u8, term: &TermWindow) -> Result<Vec<NaiveDate>, AppError> {
+    if !(1..=7).contains(&weekday) {
+        return Err(AppError::Validation("班级的上课星期不合法".into()));
+    }
+    if term.start_date > term.end_date {
+        return Err(AppError::Validation("学期的起止日期不合法".into()));
+    }
+
+    let target = u32::from(weekday);
+    let mut current = term.start_date;
+    let start_weekday = current.weekday().number_from_monday();
+    let offset = (target + 7 - start_weekday) % 7;
+    current += Duration::days(offset as i64);
+
+    if current > term.end_date {
+        return Ok(Vec::new());
+    }
+
+    let mut dates = Vec::new();
+    let mut day = current;
+    while day <= term.end_date {
+        dates.push(day);
+        day += Duration::days(7);
+    }
+    Ok(dates)
 }
 
 async fn fetch_roster_rows(state: &ApiState, class_id: Uuid) -> Result<Vec<RosterRow>, AppError> {
@@ -714,6 +815,12 @@ struct MeetingJoinRow {
 struct MeetingContext {
     meeting: ClassMeetingRow,
     class: ClassInstance,
+}
+
+#[derive(Debug, FromRow)]
+struct TermWindow {
+    start_date: NaiveDate,
+    end_date: NaiveDate,
 }
 
 impl From<&ClassInstance> for ClassOverview {
