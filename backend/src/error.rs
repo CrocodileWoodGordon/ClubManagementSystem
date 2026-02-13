@@ -13,6 +13,7 @@ pub enum AppError {
     NotFound(String),
     Conflict(String),
     Parsing(String),
+    #[allow(dead_code)]
     Unknown(String),
 }
 

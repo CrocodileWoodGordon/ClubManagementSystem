@@ -248,9 +248,6 @@ impl EnrollmentImportService {
 #[derive(Clone, Debug)]
 struct StudentRecord {
     id: Uuid,
-    homeroom: String,
-    full_name: String,
-    student_code: Option<String>,
     campus_id: Uuid,
 }
 
@@ -299,13 +296,7 @@ impl StudentIndex {
                 .try_get("student_code")
                 .map_err(|err| AppError::Database(err.to_string()))?;
 
-            let record = StudentRecord {
-                id,
-                homeroom: homeroom.clone(),
-                full_name: full_name.clone(),
-                student_code: student_code.clone(),
-                campus_id,
-            };
+            let record = StudentRecord { id, campus_id };
             let key = format!(
                 "{}::{}",
                 normalize_key(&homeroom),

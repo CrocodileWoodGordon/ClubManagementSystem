@@ -23,6 +23,7 @@ impl BillingError {
 }
 
 /// 结算批次类型：预览或正式。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BillingRunType {
@@ -31,6 +32,7 @@ pub enum BillingRunType {
 }
 
 /// 结算批次执行状态。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BillingRunStatus {
@@ -41,6 +43,7 @@ pub enum BillingRunStatus {
 }
 
 /// 费用项类型：课时费、材料费或调整。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BillingItemType {
@@ -50,6 +53,7 @@ pub enum BillingItemType {
 }
 
 /// `billing_runs` 的领域模型。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BillingRun {
     pub id: Uuid,
@@ -63,6 +67,7 @@ pub struct BillingRun {
 }
 
 /// `billing_items` 的领域模型。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BillingItem {
     pub id: Uuid,
@@ -78,6 +83,7 @@ pub struct BillingItem {
 }
 
 /// 记入 `policy_snapshot` 的核心字段。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BillingPolicySnapshot {
     #[serde(default)]
@@ -159,6 +165,7 @@ pub struct TuitionCharge {
 }
 
 /// 材料费计算结果。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialCharge {
     pub amount: f64,
@@ -251,11 +258,6 @@ pub fn evaluate_material_charge(
     };
 
     Ok(MaterialCharge { amount, reason })
-}
-
-/// 是否需要收取材料费，供服务层快速判断。
-pub fn requires_material_fee(state: MaterialFeeState) -> bool {
-    matches!(state, MaterialFeeState::Unset)
 }
 
 #[cfg(test)]

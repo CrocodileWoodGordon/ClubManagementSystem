@@ -69,6 +69,7 @@ fn is_allowed_transition(from: EnrollmentStatus, to: EnrollmentStatus) -> bool {
 /// 换课类型：区分“同社团换班”与“跨社团转入”。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferKind {
+    #[allow(dead_code)]
     SameClub,
     CrossClub,
 }
@@ -81,6 +82,7 @@ pub struct MaterialFeeDecision {
 }
 
 impl MaterialFeeDecision {
+    #[allow(dead_code)]
     pub fn requires_new_charge(&self) -> bool {
         !self.carry_over_previous_payment
             || matches!(self.new_enrollment_state, MaterialFeeState::Unset)

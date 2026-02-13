@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::error::AppError;
 
 /// Offline settlement batch that crunches attendance + billing and stores snapshots.

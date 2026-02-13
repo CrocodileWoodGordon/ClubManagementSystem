@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::domain::ClassInstance;
 use crate::error::AppError;
 

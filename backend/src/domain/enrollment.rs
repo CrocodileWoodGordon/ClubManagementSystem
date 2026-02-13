@@ -39,6 +39,7 @@ pub enum EnrollmentImportStatus {
 }
 
 /// 与 `enrollments` 表一一对应的领域模型。
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Enrollment {
     pub id: Uuid,

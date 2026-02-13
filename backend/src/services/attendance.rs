@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::domain::{
     AttendanceExcelRow, AttendanceImportBatch, AttendanceImportRow, AttendanceRecord,
-    AttendanceSessionKey, AttendanceStatus, ClassInstance, StudentProfile,
+    AttendanceSessionKey, ClassInstance, StudentProfile,
 };
 use crate::error::AppError;
 use crate::utils::excel::{ExcelWorkbook, Worksheet};
@@ -178,6 +178,7 @@ impl AttendanceService {
     }
 
     /// 兼容现有 API：直接接受考勤记录并假装写库。
+    #[allow(dead_code)]
     pub async fn record_bulk(&self, _records: Vec<AttendanceRecord>) -> Result<(), AppError> {
         Ok(())
     }
@@ -189,10 +190,12 @@ pub struct AttendanceTemplate {
 }
 
 impl AttendanceTemplate {
+    #[allow(dead_code)]
     pub fn headers(&self) -> &[String] {
         &self.worksheet.rows[0]
     }
 
+    #[allow(dead_code)]
     pub fn rows(&self) -> &[Vec<String>] {
         &self.worksheet.rows
     }
@@ -294,9 +297,10 @@ fn normalize_key(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDate, NaiveTime};
+    use chrono::{NaiveDate, NaiveTime, Utc};
 
     use super::*;
+    use crate::domain::AttendanceStatus;
 
     fn fake_class() -> ClassInstance {
         ClassInstance {

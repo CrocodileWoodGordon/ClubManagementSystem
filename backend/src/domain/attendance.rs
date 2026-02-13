@@ -260,10 +260,6 @@ impl AttendanceImportBatch {
             rows,
         })
     }
-
-    pub fn total_rows(&self) -> usize {
-        self.rows.len()
-    }
 }
 
 fn normalize_identifier(value: &str) -> String {

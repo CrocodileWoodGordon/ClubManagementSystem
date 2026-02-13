@@ -83,6 +83,7 @@ impl ExcelWorkbook {
         &self.sheets[0]
     }
 
+    #[allow(dead_code)]
     pub fn sheet(&self, index: usize) -> Option<&Worksheet> {
         self.sheets.get(index)
     }

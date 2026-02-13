@@ -122,6 +122,13 @@
     - 衔接：完成财务闭环，确保与步骤 20/21 的输出一致。
 
 23. **补充规范与接口文档**
-    - 目标：当以上步骤稳定后，单独更新 `PROJECT_SPEC.md`，把与实现一致的接口/模型补充进去。
-    - 预期修改文件：`PROJECT_SPEC.md`
-    - 衔接：确保文档与代码同步，方便后续维护。
+   - 目标：当以上步骤稳定后，单独更新 `PROJECT_SPEC.md`，把与实现一致的接口/模型补充进去。
+   - 预期修改文件：`PROJECT_SPEC.md`
+   - 衔接：确保文档与代码同步，方便后续维护。
+
+## 近期待接项
+- [ ] 将 `backend/src/db/models/*_row` 结构在 SQLx 查询层落地复用，避免长期依赖 `#[cfg_attr]` 抑制未使用告警。
+- [ ] 衔接结算批处理：把 `ReportingTask::run_settlement_batch` 接入任务调度/触发流程，实际产出 CSV 并写入 `billing_runs`/`billing_items`。
+- [ ] 在公开 API 中统一使用 `domain::Enrollment` 与 `domain::Club`，确保领域模型成为数据源而非临时 DTO。
+- [ ] 落实考勤写库闭环：实现 `AttendanceService::record_bulk` 的数据库持久化，并在后续 API 调用中启用 `AttendanceTemplate` 访问器。
+- [ ] 复用 `utils/time.rs` 与 `utils/excel.rs` 预留工具（如批处理时间戳、Workbook 多 sheet 支持），替换当前手写逻辑。

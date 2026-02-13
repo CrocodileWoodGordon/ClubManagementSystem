@@ -11,9 +11,7 @@ pub mod reporting_service;
 pub mod student_import;
 pub mod student_roster_service;
 
-pub use attendance::AttendanceService;
 pub use billing_service::BillingService;
-pub use class_assignment_service::ClassAssignmentService;
 pub use club_service::{
     AddMembersRequest, ClubDto, ClubListFilters, ClubMemberDto, ClubMemberFilters, ClubService,
     ClubUpdateChanges, MembershipEntry, NewClubInput,
@@ -31,7 +29,6 @@ pub use excel_import_service::ExcelImportService;
 pub use import_placeholder_service::{
     ImportPlaceholderConfig, ImportPlaceholderService, ImportPlaceholderType,
 };
-pub use reporting_service::ReportingService;
 pub use student_import::{StudentImportService, StudentImportSummary};
 pub use student_roster_service::{
     CloneRosterRequest, CloneRosterResult, HomeroomListFilters, HomeroomRosterDto,

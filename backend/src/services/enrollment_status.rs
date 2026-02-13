@@ -90,7 +90,6 @@ struct EnrollmentContext {
 
 #[derive(Debug, Clone)]
 struct ClassContext {
-    id: Uuid,
     term_id: Uuid,
     campus_id: Uuid,
     club_id: Uuid,
@@ -449,9 +448,6 @@ impl<'a> EnrollmentStatusService<'a> {
 
         let row = row.ok_or_else(|| AppError::NotFound("目标班级不存在".into()))?;
         Ok(ClassContext {
-            id: row
-                .try_get("id")
-                .map_err(|err| AppError::Database(err.to_string()))?,
             term_id: row
                 .try_get("term_id")
                 .map_err(|err| AppError::Database(err.to_string()))?,
