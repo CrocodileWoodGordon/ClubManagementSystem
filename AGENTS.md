@@ -103,6 +103,7 @@
 - 2026-02-13：考勤模板导出支持 `start_week`/`end_week` 查询参数，`AttendanceService::generate_template` 依据周次窗口仅填充指定周列，其余列留空，新增单元测试并执行 `cargo test services::attendance` 验证。
 - 2026-02-13：前端考勤模板导出表单新增起始/终止周输入，下载模板时传入后端周次参数并保留默认 1~18 设置。
 - 2026-02-13：强化考勤页面按钮样式，新增全局 `btn-primary`/`btn-secondary` 样式，让考勤页面操作按钮颜色与悬停反馈更醒目，已通过 `npm run lint` 验证。
+- 2026-02-13：完善考勤导入重复记录合并规则，导入同一学生同一课次多条记录时按最严重状态落库并新增重复场景单测。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

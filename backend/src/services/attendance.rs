@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     AttendanceExcelRow, AttendanceImportBatch, AttendanceImportRow, AttendanceRecord,
-    AttendanceSessionKey, ClassInstance, StudentProfile,
+    AttendanceSessionKey, AttendanceStatus, ClassInstance, StudentProfile,
 };
 use crate::error::AppError;
 use crate::utils::excel::{CellMerge, ExcelWorkbook, Worksheet};
@@ -181,7 +181,9 @@ impl AttendanceService {
         let recorded_by = batch.recorded_by.clone();
         let recorded_at = batch.submitted_at;
 
-        for row in &batch.rows {
+        let consolidated_rows = consolidate_duplicate_rows(&batch.rows);
+
+        for row in consolidated_rows {
             if let Some(enrollment_id) = row.enrollment_id {
                 let key = (batch.class_meeting_id, enrollment_id);
                 if let Some(existing) = history.records.get(&key) {
@@ -207,7 +209,7 @@ impl AttendanceService {
                     });
                 }
             } else {
-                skipped.push(row.clone());
+                skipped.push(row);
             }
         }
 
@@ -236,6 +238,55 @@ impl AttendanceService {
         Ok(())
     }
 }
+
+fn consolidate_duplicate_rows(rows: &[AttendanceImportRow]) -> Vec<AttendanceImportRow> {
+    let mut result = Vec::new();
+    let mut merged: HashMap<Uuid, AttendanceImportRow> = HashMap::new();
+    let mut order: Vec<Uuid> = Vec::new();
+
+    for row in rows {
+        if let Some(enrollment_id) = row.enrollment_id {
+            if let Some(existing) = merged.get_mut(&enrollment_id) {
+                let existing_rank = status_severity(existing.status);
+                let new_rank = status_severity(row.status);
+                if new_rank > existing_rank {
+                    *existing = row.clone();
+                } else if new_rank == existing_rank {
+                    if existing.minutes_attended.is_none() && row.minutes_attended.is_some() {
+                        existing.minutes_attended = row.minutes_attended;
+                    }
+                    if existing.note.is_none() && row.note.is_some() {
+                        existing.note = row.note.clone();
+                    }
+                }
+            } else {
+                order.push(enrollment_id);
+                merged.insert(enrollment_id, row.clone());
+            }
+        } else {
+            result.push(row.clone());
+        }
+    }
+
+    for enrollment_id in order {
+        if let Some(row) = merged.remove(&enrollment_id) {
+            result.push(row);
+        }
+    }
+
+    result
+}
+
+fn status_severity(status: AttendanceStatus) -> u8 {
+    // 缺勤 > 请假 > 病假 > 正常，用于挑选最严重状态。
+    match status {
+        AttendanceStatus::Present => 0,
+        AttendanceStatus::Excused => 1,
+        AttendanceStatus::Leave => 2,
+        AttendanceStatus::Absent => 3,
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct AttendanceTemplateContext {
@@ -669,4 +720,110 @@ mod tests {
         assert_eq!(plan.inserts.len(), 1);
         assert!(plan.skipped.is_empty());
     }
+
+    #[test]
+    fn plan_persistence_merges_duplicates_with_severe_status() {
+        let service = AttendanceService::new();
+        let class_meeting_id = Uuid::new_v4();
+        let session = AttendanceSessionKey::new(
+            Uuid::new_v4(),
+            NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+            1,
+        )
+        .unwrap();
+        let enrollment_id = Uuid::new_v4();
+
+        let rows = vec![
+            AttendanceImportRow {
+                source_row: 5,
+                student_identifier: "3A-李雷".into(),
+                enrollment_id: Some(enrollment_id),
+                status: AttendanceStatus::Present,
+                minutes_attended: Some(90),
+                note: None,
+            },
+            AttendanceImportRow {
+                source_row: 6,
+                student_identifier: "3A-李雷".into(),
+                enrollment_id: Some(enrollment_id),
+                status: AttendanceStatus::Leave,
+                minutes_attended: None,
+                note: Some("家庭原因".into()),
+            },
+            AttendanceImportRow {
+                source_row: 7,
+                student_identifier: "3A-韩梅梅".into(),
+                enrollment_id: Some(Uuid::new_v4()),
+                status: AttendanceStatus::Present,
+                minutes_attended: Some(90),
+                note: None,
+            },
+        ];
+        let batch = AttendanceImportBatch::new(
+            session,
+            class_meeting_id,
+            Some("Bob".into()),
+            rows,
+            None,
+        )
+        .unwrap();
+
+        let plan = service.plan_persistence(&batch, &AttendanceHistory::default());
+        assert_eq!(plan.inserts.len(), 2);
+        let merged = plan
+            .inserts
+            .iter()
+            .find(|record| record.enrollment_id == enrollment_id)
+            .expect("merged record exists");
+        assert_eq!(merged.status, AttendanceStatus::Leave);
+        assert_eq!(merged.recorded_by.as_deref(), Some("Bob"));
+    }
+
+    #[test]
+    fn plan_persistence_keeps_present_when_duplicates_all_present() {
+        let service = AttendanceService::new();
+        let class_meeting_id = Uuid::new_v4();
+        let session = AttendanceSessionKey::new(
+            Uuid::new_v4(),
+            NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(),
+            2,
+        )
+        .unwrap();
+        let enrollment_id = Uuid::new_v4();
+
+        let rows = vec![
+            AttendanceImportRow {
+                source_row: 8,
+                student_identifier: "3A-李雷".into(),
+                enrollment_id: Some(enrollment_id),
+                status: AttendanceStatus::Present,
+                minutes_attended: None,
+                note: None,
+            },
+            AttendanceImportRow {
+                source_row: 9,
+                student_identifier: "3A-李雷".into(),
+                enrollment_id: Some(enrollment_id),
+                status: AttendanceStatus::Present,
+                minutes_attended: Some(90),
+                note: Some("补登".into()),
+            },
+        ];
+        let batch = AttendanceImportBatch::new(
+            session,
+            class_meeting_id,
+            Some("Carol".into()),
+            rows,
+            None,
+        )
+        .unwrap();
+
+        let plan = service.plan_persistence(&batch, &AttendanceHistory::default());
+        assert_eq!(plan.inserts.len(), 1);
+        let record = &plan.inserts[0];
+        assert_eq!(record.status, AttendanceStatus::Present);
+        assert_eq!(record.minutes_attended, Some(90));
+        assert_eq!(record.recorded_by.as_deref(), Some("Carol"));
+    }
+
 }
