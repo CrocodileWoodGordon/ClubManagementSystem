@@ -120,6 +120,8 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
     const [templateLoading, setTemplateLoading] = useState(false);
     const [templateError, setTemplateError] = useState<string | null>(null);
     const [selectedMeetingId, setSelectedMeetingId] = useState("");
+    const [startWeek, setStartWeek] = useState("1");
+    const [endWeek, setEndWeek] = useState("18");
 
     const [history, setHistory] = useState<AttendanceRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -168,6 +170,8 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
         setTemplate(null);
         setTemplateError(null);
         setSelectedMeetingId("");
+        setStartWeek("1");
+        setEndWeek("18");
         setHistory([]);
         setHistoryError(null);
         setSelectedFile(null);
@@ -240,10 +244,40 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
             setTemplateError("请选择具体班级");
             return;
         }
+        const trimmedStart = startWeek.trim();
+        const trimmedEnd = endWeek.trim();
+        const parsedStart =
+            trimmedStart.length > 0 ? Number.parseInt(trimmedStart, 10) : undefined;
+        if (trimmedStart.length > 0 && Number.isNaN(parsedStart)) {
+            setTemplateError("起始周需为数字");
+            return;
+        }
+        const parsedEnd = trimmedEnd.length > 0 ? Number.parseInt(trimmedEnd, 10) : undefined;
+        if (trimmedEnd.length > 0 && Number.isNaN(parsedEnd)) {
+            setTemplateError("终止周需为数字");
+            return;
+        }
+        const MIN_WEEK = 1;
+        const MAX_WEEK = 18;
+        if (parsedStart !== undefined && (parsedStart < MIN_WEEK || parsedStart > MAX_WEEK)) {
+            setTemplateError(`起始周需介于 ${MIN_WEEK}~${MAX_WEEK}`);
+            return;
+        }
+        if (parsedEnd !== undefined && (parsedEnd < MIN_WEEK || parsedEnd > MAX_WEEK)) {
+            setTemplateError(`终止周需介于 ${MIN_WEEK}~${MAX_WEEK}`);
+            return;
+        }
+        if (parsedStart !== undefined && parsedEnd !== undefined && parsedStart > parsedEnd) {
+            setTemplateError("起始周不能大于终止周");
+            return;
+        }
         setTemplateLoading(true);
         setTemplateError(null);
         try {
-            const data = await fetchAttendanceTemplate(selectedClassId);
+            const data = await fetchAttendanceTemplate(selectedClassId, {
+                startWeek: parsedStart,
+                endWeek: parsedEnd,
+            });
             setTemplate({
                 meetings: data.meetings,
                 worksheetName: data.worksheet.name,
@@ -411,6 +445,38 @@ function AttendanceWorkspace({ summaryRows }: AttendanceWorkspaceProps) {
                                 </p>
                             </div>
                         ) : null}
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="模板起始周">
+                            <input
+                                className="input"
+                                type="number"
+                                min={1}
+                                max={18}
+                                step={1}
+                                value={startWeek}
+                                disabled={!selectedClassId}
+                                onChange={(event) => {
+                                    setStartWeek(event.target.value);
+                                    setTemplateError(null);
+                                }}
+                            />
+                        </Field>
+                        <Field label="模板终止周">
+                            <input
+                                className="input"
+                                type="number"
+                                min={1}
+                                max={18}
+                                step={1}
+                                value={endWeek}
+                                disabled={!selectedClassId}
+                                onChange={(event) => {
+                                    setEndWeek(event.target.value);
+                                    setTemplateError(null);
+                                }}
+                            />
+                        </Field>
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <button

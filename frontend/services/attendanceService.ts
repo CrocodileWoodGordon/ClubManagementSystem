@@ -27,13 +27,25 @@ export interface AttendanceImportPayload {
     ignoredIdentifiers?: string[];
 }
 
-export async function fetchAttendanceTemplate(classId: string): Promise<AttendanceTemplate> {
+export interface AttendanceTemplateOptions {
+    startWeek?: number;
+    endWeek?: number;
+}
+
+export async function fetchAttendanceTemplate(
+    classId: string,
+    options: AttendanceTemplateOptions = {},
+): Promise<AttendanceTemplate> {
     if (!classId) {
         throw new AttendanceServiceError("请先选择班级");
     }
     return safeRequest("获取考勤模板失败", async () => {
+        const query = buildQueryString({
+            start_week: options.startWeek ? String(options.startWeek) : undefined,
+            end_week: options.endWeek ? String(options.endWeek) : undefined,
+        });
         const response = await client.get<AttendanceTemplateApiResponse>(
-            `/api/attendance/template/${classId}`,
+            `/api/attendance/template/${classId}${query}`,
         );
         return mapTemplate(response);
     });
