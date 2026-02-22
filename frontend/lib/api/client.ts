@@ -6,7 +6,7 @@ export class ApiClient {
     private readonly baseUrl: string;
 
     constructor(options: ApiClientOptions = {}) {
-        this.baseUrl = options.baseUrl ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+        this.baseUrl = options.baseUrl ?? process.env.NEXT_PUBLIC_API_URL ?? "/api";
     }
 
     async get<T>(path: string): Promise<T> {
