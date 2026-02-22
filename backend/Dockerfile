@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM rust:1.75-slim AS builder
+FROM rustlang/rust:nightly-slim AS builder
 
 WORKDIR /app
 
