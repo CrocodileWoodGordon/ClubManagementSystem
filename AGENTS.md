@@ -106,6 +106,7 @@
 - 2026-02-13：完善考勤导入重复记录合并规则，导入同一学生同一课次多条记录时按最严重状态落库并新增重复场景单测。
 - 2026-02-23：更新 `README.md`，区分内部开发与客户离线部署流程，新增“客户离线部署说明”章节，指导通过 `docker load` 导入前端/后端/数据库镜像后使用 offline compose 启动，确保客户全程无需外网。
 - 2026-02-23：新增 `docker-compose.offline.yml`，默认引用 `club-management-*-:20260223` 三个离线镜像标签，去掉全部 `build` 步骤，客户运行 `docker compose -f docker-compose.offline.yml up -d` 即可离线启动。
+- 2026-02-23：新增 `docker/db/Dockerfile` 与 `docker/db/init.sh`，可构建 `club-management-db:<tag>` 预初始化镜像（自动执行 `backend/migrations`），README 中同步说明构建/验证及离线交付指引。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。

@@ -163,7 +163,7 @@
     - 预期修改文件：`docker-compose.yml`（若需提取共用部分）、新增 `docker-compose.offline.yml`、相应文档引用。
     - 验证：在本地先 `docker load` 三个 tar 包后，使用该 compose 文件启动，确认不会触发额外构建，容器均可正常启动并连通。
 
-31. **制作预初始化数据库镜像**
+31. **制作预初始化数据库镜像**（已完成 2026-02-23）
     - 目标：基于 `postgres:16-alpine` 新增 `docker/db/Dockerfile`，将 `backend/migrations/*.sql` 复制到 `/docker-entrypoint-initdb.d/`，构建 `club-management-db:<tag>` 镜像。首启时自动创建 schema（无业务数据），并输出 `docker save club-management-db:<tag> | gzip > club-management-db-<date>.tar.gz` 的离线包提供给客户。
     - 预期修改文件：`docker/db/Dockerfile`、可能的辅助脚本（例如 `docker/db/README.md`），以及主文档中关于数据库镜像加载的说明。
     - 验证：本地 `docker run --rm -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password123 -e POSTGRES_DB=club_management club-management-db:<tag>` 后，用 `psql` 检查应具备 schema 但无业务数据，再通过 `docker save` + `docker load` 验证镜像可在离线环境复现。

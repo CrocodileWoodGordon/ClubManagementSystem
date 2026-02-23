@@ -34,19 +34,36 @@ FRONTEND_ORIGIN=http://localhost:3000
 - `npm run lint` / `npm run build`（在 `frontend/`）：前端 ESLint / 生产构建检查。
 
 ## Docker 打包交付流程
-1. **构建镜像**（在仓库根目录）：
+1. **构建数据库离线镜像**（仅内部打包时执行）：
+   ```bash
+   docker build -f docker/db/Dockerfile -t club-management-db:20260223 .
+   ```
+   - 镜像中已复制 `backend/migrations` 并由 `docker/db/init.sh` 自动执行所有 SQL，生成空 schema。
+   - 构建后可临时启动容器验证：
+     ```bash
+     docker run -d --rm --name cms-db-test \
+       -e POSTGRES_USER=admin \
+       -e POSTGRES_PASSWORD=password123 \
+       -e POSTGRES_DB=club_management \
+       club-management-db:20260223
+     sleep 5
+     docker exec cms-db-test psql -U admin -d club_management -c '\dt terms'
+     docker stop cms-db-test
+     ```
+   - 若要出新版，请同步更新 `docker-compose.offline.yml` 与 README 中示例标签，再重新构建。
+2. **构建后端/前端镜像**（在仓库根目录）：
    ```bash
    docker compose build backend frontend
    ```
    该命令会调用 `backend/Dockerfile`（Rust 多阶段构建）与 `frontend/Dockerfile`（Next.js 生产构建），生成 `club-management-backend:latest` 与 `club-management-frontend:latest`。
-2. **镜像验收**：本地启动一遍确保镜像可用：
+3. **镜像验收**：本地启动一遍确保镜像可用：
    ```bash
    docker compose up -d
    docker compose logs -f backend
    docker compose logs -f frontend
    ```
    后端启动后会自动执行 `backend/migrations`，无需额外 `sqlx migrate run` 步骤。
-3. **交付方式**：
+4. **交付方式**：
    - **推送镜像仓库**：`docker tag club-management-backend:latest <registry>/club-backend:<tag>` 并 `docker push`。
    - **离线交付**：
      1. 依次执行 `docker save <image> | gzip` 导出 `club-management-backend:<tag>`、`club-management-frontend:<tag>` 以及预初始化数据库镜像 `club-management-db:<tag>`（包含最新 schema，无业务数据）。
