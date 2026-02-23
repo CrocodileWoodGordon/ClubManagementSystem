@@ -55,6 +55,19 @@ interface ClubFormState {
     graceSessions: string;
 }
 
+interface DisplayClub {
+    key: string;
+    clubId: string;
+    name: string;
+    code: string;
+    materialFee: number;
+    pricePerSession: number;
+    campusId?: string;
+    campusName?: string;
+    weekday?: number;
+    hasPlacement: boolean;
+}
+
 const WEEKDAY_OPTIONS = [
     { value: 1, label: "周一" },
     { value: 2, label: "周二" },
@@ -122,19 +135,6 @@ export function ClubManagementWorkspace({
         () => clubs.find((club) => club.id === selectedClubId) ?? null,
         [clubs, selectedClubId],
     );
-
-    interface DisplayClub {
-        key: string;
-        clubId: string;
-        name: string;
-        code: string;
-        materialFee: number;
-        pricePerSession: number;
-        campusId?: string;
-        campusName?: string;
-        weekday?: number;
-        hasPlacement: boolean;
-    }
 
     const displayClubs: DisplayClub[] = useMemo(() => {
         const entries: DisplayClub[] = [];
