@@ -1,0 +1,39 @@
+services:
+  db:
+    image: club-management-db:20260223
+    container_name: club_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: club_management
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    image: club-management-backend:20260223
+    environment:
+      DATABASE_URL: postgres://admin:password123@db:5432/club_management
+      PORT: 8080
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    image: club-management-frontend:20260223
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+      API_PROXY_TARGET: http://backend:8080
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

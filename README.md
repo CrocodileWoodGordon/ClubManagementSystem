@@ -50,12 +50,12 @@ FRONTEND_ORIGIN=http://localhost:3000
    - **推送镜像仓库**：`docker tag club-management-backend:latest <registry>/club-backend:<tag>` 并 `docker push`。
    - **离线交付**：
      1. 依次执行 `docker save <image> | gzip` 导出 `club-management-backend:<tag>`、`club-management-frontend:<tag>` 以及预初始化数据库镜像 `club-management-db:<tag>`（包含最新 schema，无业务数据）。
-     2. 打包 `docker-compose.yml`、`.env.production`（或客户定制示例）、离线部署说明，确保客户解压后即可 `docker load`。
+     2. 打包 `docker-compose.yml`、`docker-compose.offline.yml`、`.env.production`（或客户定制示例）、离线部署说明，确保客户解压后即可 `docker load`。
      3. 为每个镜像附带 `SHA256` 校验值，客户可通过 `shasum -a 256 *.tar.gz` 验证包体完整。
      4. 前端镜像已经包含 `npm ci` 与 `npm run build` 结果，客户侧不会再触发依赖安装；后端镜像包含 Rust Release 可执行文件。
 
 ## 客户离线部署说明（Docker）
-1. **准备环境**：安装 Docker Engine 24+ 与 Docker Compose v2，确认 3000/8080/5432 端口空闲；将我们交付的 `club-management-backend-<tag>.tar.gz`、`club-management-frontend-<tag>.tar.gz`、`club-management-db-<tag>.tar.gz`、`docker-compose.yml`、`.env.production` 放在同一目录。
+1. **准备环境**：安装 Docker Engine 24+ 与 Docker Compose v2，确认 3000/8080/5432 端口空闲；将我们交付的 `club-management-backend-<tag>.tar.gz`、`club-management-frontend-<tag>.tar.gz`、`club-management-db-<tag>.tar.gz`、`docker-compose.offline.yml`、`.env.production` 放在同一目录（如需自定义镜像标签，可直接编辑该 offline compose 文件）。
 2. **导入镜像**（全程离线）：
    ```bash
    docker load -i club-management-db-<tag>.tar.gz
@@ -67,23 +67,22 @@ FRONTEND_ORIGIN=http://localhost:3000
 3. **配置环境变量**：根据部署环境填写 `.env.production`（示例内容与 `backend/.env` 相同），重点确认 `DATABASE_URL=postgres://admin:password123@db:5432/club_management`、`FRONTEND_ORIGIN` 以及前端 `NEXT_PUBLIC_API_URL`/`API_PROXY_TARGET`。
 4. **首次启动**：
    ```bash
-   docker compose --env-file .env.production up -d --no-build
+   docker compose -f docker-compose.offline.yml --env-file .env.production up -d
    ```
-   - `--no-build` 会忽略 compose 中的 `build` 段，确保只使用刚刚导入的镜像，不触发任何拉取/构建步骤。
-   - 若需要单独启动某个服务，可附加服务名（例如 `docker compose ... up -d --no-build backend frontend`）。
+   - Offline 版本不包含任何 `build` 指令，默认就会直接使用已导入的镜像，如果只想启动部分服务，可在命令末尾追加服务名（如 `backend frontend`）。
 5. **健康检查**：
    ```bash
-   docker compose ps
+   docker compose -f docker-compose.offline.yml ps
    curl http://localhost:8080/health
    curl -I http://localhost:3000
    ```
    浏览器访问 `http://localhost:3000` 可确认前端静态资源与 API 代理是否正常（不需要额外下载）。
 6. **运维与升级**：
-   - 日志：`docker compose logs -f backend`、`docker compose logs -f frontend`、`docker compose logs -f db`。
-   - 重启：`docker compose restart backend`。
-   - 停止：`docker compose down`（保留数据）或 `docker compose down -v`（连同数据库卷一起清空）。
-   - 升级：仅需加载新版本 tar 包，然后运行 `docker compose --env-file .env.production up -d --no-build --force-recreate`，无需 `docker compose pull`。
-   - 如看到 “image not found” 报错，请重新执行 `docker load` 并用 `docker compose images` 检查三张镜像均已就绪。
+   - 日志：`docker compose -f docker-compose.offline.yml logs -f backend`、`... frontend`、`... db`。
+   - 重启：`docker compose -f docker-compose.offline.yml restart backend`。
+   - 停止：`docker compose -f docker-compose.offline.yml down`（保留数据）或 `... down -v`（连同数据库卷一起清空）。
+   - 升级：仅需加载新版本 tar 包，然后运行 `docker compose -f docker-compose.offline.yml --env-file .env.production up -d --force-recreate`，无需 `docker compose pull`。
+   - 如看到 “image not found” 报错，请重新执行 `docker load` 并用 `docker compose -f docker-compose.offline.yml images` 检查三张镜像均已就绪。
 
 ### 数据库重建（开发环境）
 ```bash

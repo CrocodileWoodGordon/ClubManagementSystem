@@ -158,7 +158,7 @@
     - 预期修改文件：`README.md`、必要的话同步 `AGENTS.md` 中对交付方式的记录。
     - 验证：自查文档中不再出现让客户主动拉取镜像/依赖的指令，新增的离线流程涵盖镜像加载、环境变量、健康检查等步骤。
 
-30. **提供离线专用 Compose 配置**
+30. **提供离线专用 Compose 配置**（已完成 2026-02-23）
     - 目标：新建 `docker-compose.offline.yml`（或调整现有 compose，通过 profile/override）仅引用预构建镜像标签（例如 `club-management-backend:<tag>`、`club-management-frontend:<tag>`、`club-management-db:<tag>`），完全去掉 `build` 块，确保客户即使直接执行 `docker compose -f docker-compose.offline.yml up -d` 也不会触发 `npm ci`/`apt-get`/远程镜像拉取。
     - 预期修改文件：`docker-compose.yml`（若需提取共用部分）、新增 `docker-compose.offline.yml`、相应文档引用。
     - 验证：在本地先 `docker load` 三个 tar 包后，使用该 compose 文件启动，确认不会触发额外构建，容器均可正常启动并连通。
