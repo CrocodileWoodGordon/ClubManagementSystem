@@ -1,5 +1,10 @@
 import { ApiClient } from "@/lib/api/client";
-import type { FeeBreakdown, HomeroomBillingReport, StudentBillingItem } from "@/lib/types";
+import type {
+    FeeBreakdown,
+    HomeroomBillingReport,
+    StudentBillingItem,
+    TuitionWaiverReason,
+} from "@/lib/types";
 
 const client = new ApiClient();
 
@@ -85,7 +90,7 @@ function mapBreakdown(payload: FeeBreakdownApi): FeeBreakdown {
         discountAmount: Number(payload.discount_amount),
         attendanceCount: payload.attendance_count,
         chargedSessions: payload.charged_sessions,
-        waiveReason: toOptional(payload.waive_reason),
+        waiveReason: mapWaiverReason(payload.waive_reason),
         remarks: toOptional(payload.remarks),
     };
 }
@@ -102,6 +107,19 @@ function mapStudentBreakdown(payload: StudentBillingItemApi): StudentBillingItem
 
 function toOptional<T>(value: T | null | undefined): T | undefined {
     return value === null || value === undefined ? undefined : value;
+}
+
+const WAIVER_REASON_MAP: Record<string, TuitionWaiverReason> = {
+    DROP_WITHIN_GRACE: "DROP_WITHIN_GRACE",
+    MANUAL_OVERRIDE: "MANUAL_OVERRIDE",
+    TEACHER_BENEFIT: "TEACHER_BENEFIT",
+};
+
+function mapWaiverReason(value: string | null): TuitionWaiverReason | undefined {
+    if (!value) {
+        return undefined;
+    }
+    return WAIVER_REASON_MAP[value] ?? undefined;
 }
 
 interface SettlementResponse {
