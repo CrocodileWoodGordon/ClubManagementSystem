@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { EnrollmentSlotExplorer } from "@/components/enrollments/EnrollmentSlotExplorer";
 import { fetchEnrollmentSummary } from "@/services/enrollmentService";
 
+export const dynamic = "force-dynamic";
+
 export default async function EnrollmentSlotPage() {
     const summaryRows = await fetchEnrollmentSummary();
 

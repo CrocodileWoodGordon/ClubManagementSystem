@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { TermSettingsPanel } from "@/components/settings/TermSettingsPanel";
 import { fetchTerms } from "@/services/termService";
 
+export const dynamic = "force-dynamic";
+
 export default async function TermSettingsPage() {
     const terms = await fetchTerms();
 

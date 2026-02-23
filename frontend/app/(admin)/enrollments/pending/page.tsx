@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { PendingEnrollmentTable } from "@/components/enrollments/PendingEnrollmentTable";
 import { fetchPendingEnrollments } from "@/services/enrollmentService";
 
+export const dynamic = "force-dynamic";
+
 export default async function PendingEnrollmentPage() {
     const pendingEnrollments = await fetchPendingEnrollments();
 

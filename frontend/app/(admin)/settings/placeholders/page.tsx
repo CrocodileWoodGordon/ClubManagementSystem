@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { PlaceholderSettingsPanel } from "@/components/enrollments/PlaceholderSettingsPanel";
 import { fetchImportPlaceholders } from "@/services/importPlaceholderService";
 
+export const dynamic = "force-dynamic";
+
 export default async function EnrollmentPlaceholderSettingsPage() {
     const configs = await fetchImportPlaceholders();
 
