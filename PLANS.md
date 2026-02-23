@@ -151,6 +151,23 @@
     - 预期修改文件：`PROJECT_SPEC.md`
     - 衔接：确保文档与代码同步，方便后续维护。
 
+## 离线交付专项计划（2026-02-23）
+
+29. **整理客户离线部署文档**（已完成 2026-02-23）
+    - 目标：在 `README.md`（及必要时 `AGENTS.md`）补充“离线交付”章节，移除/标注所有需要外网拉取的操作（例如 `docker compose build`、`docker compose pull`、`npm install`），改为“加载离线镜像 tar 包 + docker compose up --no-build”的流程，并解释前端/后端镜像在离线场景下如何校验。
+    - 预期修改文件：`README.md`、必要的话同步 `AGENTS.md` 中对交付方式的记录。
+    - 验证：自查文档中不再出现让客户主动拉取镜像/依赖的指令，新增的离线流程涵盖镜像加载、环境变量、健康检查等步骤。
+
+30. **提供离线专用 Compose 配置**
+    - 目标：新建 `docker-compose.offline.yml`（或调整现有 compose，通过 profile/override）仅引用预构建镜像标签（例如 `club-management-backend:<tag>`、`club-management-frontend:<tag>`、`club-management-db:<tag>`），完全去掉 `build` 块，确保客户即使直接执行 `docker compose -f docker-compose.offline.yml up -d` 也不会触发 `npm ci`/`apt-get`/远程镜像拉取。
+    - 预期修改文件：`docker-compose.yml`（若需提取共用部分）、新增 `docker-compose.offline.yml`、相应文档引用。
+    - 验证：在本地先 `docker load` 三个 tar 包后，使用该 compose 文件启动，确认不会触发额外构建，容器均可正常启动并连通。
+
+31. **制作预初始化数据库镜像**
+    - 目标：基于 `postgres:16-alpine` 新增 `docker/db/Dockerfile`，将 `backend/migrations/*.sql` 复制到 `/docker-entrypoint-initdb.d/`，构建 `club-management-db:<tag>` 镜像。首启时自动创建 schema（无业务数据），并输出 `docker save club-management-db:<tag> | gzip > club-management-db-<date>.tar.gz` 的离线包提供给客户。
+    - 预期修改文件：`docker/db/Dockerfile`、可能的辅助脚本（例如 `docker/db/README.md`），以及主文档中关于数据库镜像加载的说明。
+    - 验证：本地 `docker run --rm -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password123 -e POSTGRES_DB=club_management club-management-db:<tag>` 后，用 `psql` 检查应具备 schema 但无业务数据，再通过 `docker save` + `docker load` 验证镜像可在离线环境复现。
+
 ## 近期待接项
 - [ ] 将 `backend/src/db/models/*_row` 结构在 SQLx 查询层落地复用，避免长期依赖 `#[cfg_attr]` 抑制未使用告警。
 - [ ] 衔接结算批处理：把 `ReportingTask::run_settlement_batch` 接入任务调度/触发流程，实际产出 CSV 并写入 `billing_runs`/`billing_items`。
