@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { ClassAssignmentBoard } from "@/components/class-assignment/ClassAssignmentBoard";
 import { fetchEnrollmentSummary } from "@/services/enrollmentService";
 
+export const dynamic = "force-dynamic";
+
 export default async function ClassAssignmentPage() {
     const summaryRows = await fetchEnrollmentSummary();
 
