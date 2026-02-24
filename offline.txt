@@ -1,0 +1,85 @@
+# 离线交付使用教程（客户版）
+
+本文件配合离线交付压缩包使用。压缩包解压后会看到：
+- club-management-backend.tar
+- club-management-frontend.tar
+- club-management-db.tar
+- docker-compose.yml（供内部核对，可不动）
+- offline/.env.production（示例环境变量）
+- offline/docker-compose.offline.yml（离线运行所需 Compose 文件）
+
+## 1. 前期准备
+1. 电脑已安装 Docker。Windows 与 macOS 用户请安装 [Docker Desktop]；Linux 用户安装 docker 与 docker compose v2（通常 `apt install docker.io docker-compose-plugin`）。
+2. 确认磁盘至少剩余 10GB（镜像 + 数据库）。
+3. 具备系统管理员权限（加载镜像与启动容器需要）。
+
+## 2. 解压交付包
+1. 将整个压缩包复制到目标电脑（完全离线也可）。
+2. 在任意目录解压，例如 Windows 资源管理器右键“全部解压”，或 Linux/macOS 执行：
+   ```bash
+   unzip ClubManagement.zip -d ClubManagement
+   ```
+3. 后续步骤都在解压后的 `ClubManagement` 目录中进行。
+
+## 3. 导入镜像（必须三张都导入）
+依次在终端/PowerShell 里执行（命令前先 `cd ClubManagement`）：
+```bash
+docker load -i club-management-db.tar
+docker load -i club-management-backend.tar
+docker load -i club-management-frontend.tar
+```
+等待每条命令出现 “Loaded image” 即代表成功。可用 `docker images | grep club-management` 检查三张镜像均存在。
+
+## 4. 配置环境变量
+1. 打开 `offline/.env.production`，按照提示修改（普通记事本即可）。
+2. 关键字段：
+   - `DATABASE_URL=postgres://admin:password123@db:5432/club_management`（保持不变即可）。
+   - `PORT=8080`（后端对外端口，需要与防火墙策略一致）。
+   - `FRONTEND_ORIGIN=http://localhost:3000`（如需通过局域网访问，请改成实际域名或 IP）。
+   - 前端部分 `NEXT_PUBLIC_API_URL=http://localhost:8080`；若对外发布，可把 `localhost` 换成服务器 IP。
+3. 保存文件后即可进入下一步。
+
+## 5. 启动系统
+在 `ClubManagement` 目录执行：
+```bash
+docker compose -f offline/docker-compose.offline.yml --env-file offline/.env.production up -d
+```
+- 首次启动会创建数据库并自动初始化表结构，需等待约 1 分钟。
+- 如需仅启动部分服务，可在命令末尾加服务名，例如 `... up -d backend frontend`。
+
+## 6. 验证服务
+1. 查看容器状态：
+   ```bash
+   docker compose -f offline/docker-compose.offline.yml ps
+   ```
+   所有服务 `State` 均为 `running` 即正常。
+2. 在浏览器打开 `http://服务器IP:3000`，应看到管理后台登录页。
+3. 可选：在命令行执行 `curl http://localhost:8080/health` 检查后端健康状态返回 `{"status":"ok"}`。
+
+## 7. 常用运维操作
+- 查看日志：
+  ```bash
+  docker compose -f offline/docker-compose.offline.yml logs -f backend
+  docker compose -f offline/docker-compose.offline.yml logs -f frontend
+  docker compose -f offline/docker-compose.offline.yml logs -f db
+  ```
+- 重启某个服务：`docker compose -f offline/docker-compose.offline.yml restart backend`
+- 停止全部服务但保留数据：`docker compose -f offline/docker-compose.offline.yml down`
+- 停止并清空数据库数据：`docker compose -f offline/docker-compose.offline.yml down -v`
+
+## 8. 升级到新版本
+1. 从供应方获取新的 `.tar` 镜像文件并覆盖旧文件。
+2. 重新执行第 3 步的 `docker load` 三条命令。
+3. 运行：
+   ```bash
+   docker compose -f offline/docker-compose.offline.yml --env-file offline/.env.production up -d --force-recreate
+   ```
+   这样会以新镜像重新创建容器，原有数据库卷不受影响。
+
+## 9. 故障排查提示
+- 启动时报 “image not found”：说明还未 `docker load`，按第 3 步重新导入。
+- 浏览器打不开前端：确认 3000 端口防火墙已放行，并查看 `frontend` 日志是否报错。
+- 后端接口无法访问：执行 `curl http://localhost:8080/health`，若失败请查看 `backend` 日志；如提示数据库连接失败，请确认 `db` 容器 `State` 是否为 `running`。
+- 需要恢复出厂设置：执行 `docker compose -f offline/docker-compose.offline.yml down -v`，然后重新 `up -d`（注意会清空所有数据）。
+
+全部操作完成后，即可让最终用户通过浏览器访问前端地址 (`http://服务器IP:3000`) 并登录系统。
