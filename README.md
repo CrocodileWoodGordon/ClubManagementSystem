@@ -36,7 +36,7 @@ FRONTEND_ORIGIN=http://localhost:3000
 ## Docker 打包交付流程
 1. **构建数据库离线镜像**（仅内部打包时执行）：
    ```bash
-   docker build -f docker/db/Dockerfile -t club-management-db:20260223 .
+   docker build -f docker/db/Dockerfile -t club-management-db:260227 .
    ```
    - 镜像中已复制 `backend/migrations` 并由 `docker/db/init.sh` 自动执行所有 SQL，生成空 schema。
    - 构建后可临时启动容器验证：
@@ -45,7 +45,7 @@ FRONTEND_ORIGIN=http://localhost:3000
        -e POSTGRES_USER=admin \
        -e POSTGRES_PASSWORD=password123 \
        -e POSTGRES_DB=club_management \
-       club-management-db:20260223
+       club-management-db:260227
      sleep 5
      docker exec cms-db-test psql -U admin -d club_management -c '\dt terms'
      docker stop cms-db-test

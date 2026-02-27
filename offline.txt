@@ -1,9 +1,9 @@
 # 离线交付使用教程（客户版）
 
 本文件配合离线交付压缩包使用。压缩包解压后会看到：
-- club-management-backend.tar
-- club-management-frontend.tar
-- club-management-db.tar
+- club-management-backend-260227.tar
+- club-management-frontend-260227.tar
+- club-management-db-260227.tar
 - docker-compose.yml（供内部核对，可不动）
 - offline/.env.production（示例环境变量）
 - offline/docker-compose.offline.yml（离线运行所需 Compose 文件）
@@ -24,9 +24,9 @@
 ## 3. 导入镜像（必须三张都导入）
 依次在终端/PowerShell 里执行（命令前先 `cd ClubManagement`）：
 ```bash
-docker load -i club-management-db.tar
-docker load -i club-management-backend.tar
-docker load -i club-management-frontend.tar
+docker load -i club-management-db-260227.tar
+docker load -i club-management-backend-260227.tar
+docker load -i club-management-frontend-260227.tar
 ```
 等待每条命令出现 “Loaded image” 即代表成功。可用 `docker images | grep club-management` 检查三张镜像均存在。
 
@@ -68,7 +68,7 @@ docker compose -f offline/docker-compose.offline.yml --env-file offline/.env.pro
 - 停止并清空数据库数据：`docker compose -f offline/docker-compose.offline.yml down -v`
 
 ## 8. 升级到新版本
-1. 从供应方获取新的 `.tar` 镜像文件并覆盖旧文件。
+1. 从供应方获取新的 `.tar` 镜像文件（例如 `club-management-backend-260227.tar`）并覆盖旧文件。
 2. 重新执行第 3 步的 `docker load` 三条命令。
 3. 运行：
    ```bash
