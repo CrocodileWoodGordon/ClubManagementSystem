@@ -108,6 +108,8 @@
 - 2026-02-23：新增 `docker-compose.offline.yml`，默认引用 `club-management-*-:20260223` 三个离线镜像标签，去掉全部 `build` 步骤，客户运行 `docker compose -f docker-compose.offline.yml up -d` 即可离线启动。
 - 2026-02-23：新增 `docker/db/Dockerfile` 与 `docker/db/init.sh`，可构建 `club-management-db:<tag>` 预初始化镜像（自动执行 `backend/migrations`），README 中同步说明构建/验证及离线交付指引。
 - 2026-02-23：新增 `docker/offline/` 目录，集中存放 `docker-compose.offline.yml` 与 `.env.production` 示例，方便打包离线交付物并在 README 中引用统一路径。
+- 2026-02-27：后端启动时改为调用 `db::run_migrations`，若检测到离线镜像已提前建表则只补齐 `_sqlx_migrations` 记录，避免重复建表报错；`cargo check` 验证通过。
+- 2026-02-27：更新数据库镜像 LABEL 与构建流程，三张离线镜像（db/backend/frontend）均重建并统一打上 `260227` 标签，offline compose 默认引用该版本。
 
 ## 跨文件接口备忘
 - `frontend/services/enrollmentService.ts` 通过 `GET /api/enrollments/pending` 读取待分班名单（当前返回空数组，需要后端实现）。
