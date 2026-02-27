@@ -287,7 +287,6 @@ fn status_severity(status: AttendanceStatus) -> u8 {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct AttendanceTemplateContext {
     pub club_name: String,
@@ -759,14 +758,9 @@ mod tests {
                 note: None,
             },
         ];
-        let batch = AttendanceImportBatch::new(
-            session,
-            class_meeting_id,
-            Some("Bob".into()),
-            rows,
-            None,
-        )
-        .unwrap();
+        let batch =
+            AttendanceImportBatch::new(session, class_meeting_id, Some("Bob".into()), rows, None)
+                .unwrap();
 
         let plan = service.plan_persistence(&batch, &AttendanceHistory::default());
         assert_eq!(plan.inserts.len(), 2);
@@ -809,14 +803,9 @@ mod tests {
                 note: Some("补登".into()),
             },
         ];
-        let batch = AttendanceImportBatch::new(
-            session,
-            class_meeting_id,
-            Some("Carol".into()),
-            rows,
-            None,
-        )
-        .unwrap();
+        let batch =
+            AttendanceImportBatch::new(session, class_meeting_id, Some("Carol".into()), rows, None)
+                .unwrap();
 
         let plan = service.plan_persistence(&batch, &AttendanceHistory::default());
         assert_eq!(plan.inserts.len(), 1);
@@ -825,5 +814,4 @@ mod tests {
         assert_eq!(record.minutes_attended, Some(90));
         assert_eq!(record.recorded_by.as_deref(), Some("Carol"));
     }
-
 }
