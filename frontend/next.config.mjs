@@ -1,9 +1,7 @@
-import type { NextConfig } from "next";
-
 const apiProxyTarget =
   (process.env.API_PROXY_TARGET ?? "http://localhost:8080").replace(/\/$/, "");
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   async rewrites() {
     return [
       {
